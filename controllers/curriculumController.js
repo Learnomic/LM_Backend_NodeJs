@@ -28,21 +28,34 @@ export const getQuiz = async (req, res) => {
         const { videoId } = req.params;
         const quiz = await Quiz.findOne({ videoId });
         if (!quiz) return res.status(404).json({ error: 'Quiz not found' });
-        res.json(quiz);
+
+          // Shuffle questions using Fisher-Yates algorithm
+    const shuffledQuestions = [...quiz.questions].sort(() => Math.random() - 0.5);
+
+    // Pick first 10 questions
+    const limitedQuestions = shuffledQuestions.slice(0, 10);
+
+    // Return modified quiz with only 10 shuffled questions
+    res.json({
+      ...quiz.toObject(),
+      questions: limitedQuestions,
+    });
+
+        // res.json(quiz);
     } catch (err) {
         res.status(500).json({ error: err.message });
     }
 };
 
-export const submitQuiz = async (req, res) => {
-    try {
-        const result = new Result(req.body);
-        await result.save();
-        res.status(201).json({ message: 'Quiz submitted successfully' });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-};
+// export const submitQuiz = async (req, res) => {
+//     try {
+//         const result = new Result(req.body);
+//         await result.save();
+//         res.status(201).json({ message: 'Quiz submitted successfully' });
+//     } catch (err) {
+//         res.status(500).json({ error: err.message });
+//     }
+// };
 
 export const postCurriculum = async (req, res) => {
     try {
