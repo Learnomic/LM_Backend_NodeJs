@@ -5,7 +5,8 @@ import curriculumRoutes from './routes/curriculumRoutes.js';
 import dotenv from 'dotenv';
 import connectDB from "./config/db.js";
 import authRoutes from './routes/authRoutes.js';
-import submitQuizRoutes from './routes/submitQuizRoutes.js';
+import QuizRoutes from './routes/quizRoutes.js';
+
 
 // Connect to MongoDB
 connectDB();
@@ -18,7 +19,8 @@ app.use(cors());
 app.use(express.json());
 app.use('/api', curriculumRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api/quiz',submitQuizRoutes);
+app.use('/api',QuizRoutes);
+// app.use('/api', dashboardRoutes)
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

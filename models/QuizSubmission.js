@@ -29,6 +29,10 @@ const quizSubmissionSchema = new mongoose.Schema({
     type: String,
     required: true,
   },
+    subject: {   // ✅ ADD THIS
+    type: String,
+    required: true,
+  },
   totalQuestions: {
     type: Number,
     required: true,

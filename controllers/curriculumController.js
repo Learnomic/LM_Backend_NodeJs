@@ -24,6 +24,8 @@ export const getCurriculum = async (req, res) => {
 };
 
 export const getQuiz = async (req, res) => {
+    console.log("Fetching quiz for videoId:", req.params.videoId);
+    
     try {
         const { videoId } = req.params;
         const quiz = await Quiz.findOne({ videoId });
