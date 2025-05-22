@@ -1,11 +1,11 @@
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
-import curriculumRoutes from './routes/curriculumRoutes.js';
+import curriculumRoutes from './src/routes/curriculumRoutes.js';
 import dotenv from 'dotenv';
-import connectDB from "./config/db.js";
-import authRoutes from './routes/authRoutes.js';
-import QuizRoutes from './routes/quizRoutes.js';
+import connectDB from "./src/config/db.js";
+import authRoutes from './src/routes/authRoutes.js';
+import QuizRoutes from './src/routes/quizRoutes.js';
 
 
 // Connect to MongoDB
