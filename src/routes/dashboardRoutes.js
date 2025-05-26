@@ -1,26 +1,24 @@
-// import express from 'express';
-// import { getUserDashboard } from '../controllers/quizController.js';
-// import protect from '../middleware/authMiddleware.js';
+import express from 'express';
+import { 
+    getUserDashboard, 
+    getUserStreak, 
+    getUserBadges, 
+    getUserAchievements, 
+    getFunFacts, 
+    getContinueLearning 
+} from '../controllers/dashboardController.js';
+import protect from '../middleware/authMiddleware.js';
 
-// const router = express.Router();
+const router = express.Router();
 
+// Main dashboard route - returns all dashboard data
+router.get('/dashboard', protect, getUserDashboard);
 
-// router.get('/dashboard', protect, getUserDashboard);
+// Individual dashboard component routes for more granular data fetching
+router.get('/dashboard/streak', protect, getUserStreak);
+router.get('/dashboard/badges', protect, getUserBadges);
+router.get('/dashboard/achievements', protect, getUserAchievements);
+router.get('/dashboard/fun-facts', protect, getFunFacts);
+router.get('/dashboard/continue-learning', protect, getContinueLearning);
 
-
-// export default router;
-
-
-
-
-
-
-
-// // const express = require('express');
-// // const router = express.Router();
-// // const authMiddleware = require('../middleware/authMiddleware');
-// // const { getDashboardData } = require('../controllers/dashboardController');
-
-// // router.get('/', authMiddleware, getDashboardData); // 🛡️ Protected
-
-// // module.exports = router;
+export default router;

@@ -1,0 +1,60 @@
+{
+    "averageScore": 55,
+    "highestScore": 100,
+    "completedVideos": 3,
+    "totalQuizzes": 4,
+    "achievements": {
+        "firstSteps": true,
+        "quizApprentice": 4,
+        "quizMaster": 4,
+        "perfectScoreCount": 1,
+        "highPerformer": false,
+        "subjectExplorer": 2,
+        "weeklyWarrior": false
+    },
+    "chartData": {
+        "scoreDistribution": {
+            "low": 1,
+            "mid": 2,
+            "high": 1
+        },
+        "quizzesBySubject": {
+            "undefined": 1,
+            "Mathematics": 3
+        }
+    },
+    "badges": [
+        "Beginner Badge",
+        "Math Enthusiast"
+    ],
+    "funFacts": [
+        "You scored 100% on your first quiz!",
+        "You completed 3 videos in one day!"
+    ],
+    "quizHistory": [
+        {
+            "quizId": 1,
+            "subject": "Mathematics",
+            "score": 100,
+            "date": "2023-10-01"
+        },
+        {
+            "quizId": 2,
+            "subject": "Mathematics",
+            "score": 50,
+            "date": "2023-10-02"
+        },
+        {
+            "quizId": 3,
+            "subject": "Mathematics",
+            "score": 60,
+            "date": "2023-10-03"
+        },
+        {
+            "quizId": 4,
+            "subject": "Undefined",
+            "score": 10,
+            "date": "2023-10-04"
+        }
+    ]
+}
