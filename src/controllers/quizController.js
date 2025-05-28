@@ -36,12 +36,29 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
         const video = await Video.findById(quiz.videoId);
         console.log('Video found by ID:', video);
 
+        // Shuffle questions array using Fisher-Yates algorithm
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+
+        // Create a copy of questions array and shuffle it
+        const shuffledQuestions = shuffleArray([...quiz.questions]);
+        
+        // Take only first 10 questions
+        const selectedQuestions = shuffledQuestions.slice(0, 10);
+
         // Prepare the response with or without subject information
         const response = {
             _id: quiz._id,
             videoUrl: quiz.videoUrl,
             videoId: quiz.videoId,
-            questions: quiz.questions
+            questions: selectedQuestions,
+            totalQuestions: quiz.questions.length,
+            selectedQuestionsCount: selectedQuestions.length
         };
 
         // If video is found, get subject information
