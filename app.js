@@ -10,6 +10,7 @@ import connectDB from "./src/config/db.js";
 import authRoutes from './src/routes/authRoutes.js';
 import QuizRoutes from './src/routes/quizRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
+import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
 
 // Connect to MongoDB
 connectDB();
@@ -21,8 +22,9 @@ app.use(cors());
 app.use(express.json());
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/auth', authRoutes);
-app.use('/api',QuizRoutes);
-app.use('/api', dashboardRoutes); // ✅ Use dashboardRoutes for /dashboard endpoint
+app.use('/api', QuizRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/leaderboard', leaderboardRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

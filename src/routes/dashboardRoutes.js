@@ -1,38 +1,27 @@
 import express from 'express';
-import { 
-    getUserDashboard, 
-    getUserStreak, 
-    getUserBadges, 
-    getUserAchievements, 
-    getFunFacts, 
-    getContinueLearning,
+import {
+    getUserDashboard,
+    getUserStreak,
+    getUserAchievements,
+    getFunFacts,
     getUserProgress,
-    getSubjectProgress
+    getSubjectProgress,
+    getContinueLearning
 } from '../controllers/dashboardController.js';
-import { getLeaderboard } from '../controllers/quizController.js';
 import protect from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Main dashboard route - returns all dashboard data
-router.get('/dashboard', protect, getUserDashboard);
+// All routes are protected
+router.use(protect);
 
-// Individual dashboard component routes for more granular data fetching
-router.get('/dashboard/streak', protect, getUserStreak);
-router.get('/dashboard/badges', protect, getUserBadges);
-router.get('/dashboard/achievements', protect, getUserAchievements);
-router.get('/dashboard/fun-facts', protect, getFunFacts);
-router.get('/dashboard/continue-learning', protect, getContinueLearning);
-
-// Leaderboard route under dashboard
-router.get('/dashboard/leaderboard/:videoId', protect, getLeaderboard);
-
-// Protected Routes
-router.get('/user/achievements', protect, getUserAchievements);
-// Add routes for progress and subject progress later
-
-// User specific progress routes (can also be considered part of dashboard)
-router.get('/user/progress', protect, getUserProgress);
-router.get('/subject_progress', protect, getSubjectProgress);
+// Dashboard routes
+router.get('/', getUserDashboard);
+router.get('/streak', getUserStreak);
+router.get('/achievements', getUserAchievements);
+router.get('/fun-facts', getFunFacts);
+router.get('/progress', getUserProgress);
+router.get('/subject-progress', getSubjectProgress);
+router.get('/continue-learning', getContinueLearning);
 
 export default router;

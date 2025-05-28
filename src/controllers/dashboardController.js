@@ -1,6 +1,6 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/User.js';
-import { BADGES, ACHIEVEMENTS } from '../constants/rewards.js';
+import { ACHIEVEMENTS } from '../constants/rewards.js';
 import QuizScore from '../models/QuizScore.js';
 import mongoose from 'mongoose';
 import Subject from '../models/Subject.js';
@@ -27,46 +27,15 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
     try {
         console.log('Fetching dashboard data for user:', userId);
 
-        // Define the leaderboard aggregation pipeline
-        const leaderboardAggregationPipeline = [
-            { $match: { userId: { $ne: null } } }, // Filter out entries with null userId
-            { $group: {
-                _id: "$userId",
-                totalQuizzes: { $sum: 1 },
-                averageScore: { $avg: "$score" },
-                totalScore: { $sum: "$score" }
-            }},
-            { $sort: { averageScore: -1 } },
-            { $limit: 5 },
-            { $lookup: {
-                from: 'Users',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'userDetails'
-            }},
-            { $unwind: '$userDetails' },
-            { $project: {
-                _id: 0,
-                userId: '$_id',
-                name: '$userDetails.name',
-                totalQuizzes: 1,
-                averageScore: { $round: ['$averageScore', 2] },
-                totalScore: 1
-            }}
-        ];
-
-        console.log('Leaderboard aggregation pipeline defined:', JSON.stringify(leaderboardAggregationPipeline));
-
+        // Fetch all required data in parallel for better performance
         const [
             quizScoresCurrentUser,
-            leaderboardData,
             subjectProgress,
             user
         ] = await Promise.all([
             // Fetch quiz scores for the current user
             QuizScore.find({ userId: userId }).sort({ createdAt: -1 }),
-            // Execute aggregation for leaderboard
-            QuizScore.aggregate(leaderboardAggregationPipeline).exec(),
+            // Execute aggregation for subject progress
             QuizScore.aggregate([
                 { $match: { userId: new mongoose.Types.ObjectId(userId) } },
                 { $group: {
@@ -86,10 +55,8 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
 
         console.log('Successfully fetched initial data');
         console.log('Quiz scores current user count:', quizScoresCurrentUser.length);
-        console.log('Leaderboard data:', leaderboardData);
         console.log('Subject progress count:', subjectProgress.length);
         console.log('User found:', !!user);
-        console.log('User badges array:', user?.badges);
 
         // Calculate quiz statistics using quizScoresCurrentUser
         const totalQuizzes = quizScoresCurrentUser.length;
@@ -173,10 +140,6 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             };
         });
 
-        // Format badges data
-        const userBadges = user?.badges || [];
-        const formattedBadges = userBadges.map(badgeId => BADGES[badgeId.toUpperCase()]).filter(Boolean);
-
         // Format fun facts
         const formattedFunFacts = [ // Static fun facts
             { id: 1, text: "Did you know? The average human attention span is shorter than a goldfish's! Keep practicing!", category: "General", icon: "💡" },
@@ -186,18 +149,9 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             { id: 5, text: "Challenge yourself with topics you find difficult – that's where the biggest growth happens!", category: "Motivation", icon: "💪" }
         ];
 
-        // Format leaderboard
-        const formattedLeaderboard = leaderboardData.map(entry => ({
-            userId: entry.userId,
-            name: entry.name,
-            totalQuizzes: entry.totalQuizzes,
-            averageScore: entry.averageScore,
-            totalScore: entry.totalScore
-        }));
-
         // Format subject progress (assuming subjectProgress is already in desired format from aggregation)
         const formattedSubjectProgress = subjectProgress.map(sp => ({
-            subjectId: sp.subjectId,
+            subjectId: sp._id,
             subjectName: sp.subjectName,
             totalQuizzes: sp.totalQuizzes,
             averageScore: sp.averageScore,
@@ -212,10 +166,8 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             completedVideos,
             totalQuizzes,
             achievements: achievementsWithProgress,
-            badges: formattedBadges,
             funFacts: formattedFunFacts,
             chartData,
-            leaderboard: formattedLeaderboard,
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
             userStats: {
@@ -263,41 +215,6 @@ export const getUserStreak = asyncHandler(async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch user streak',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
-
-// Get user's badges
-export const getUserBadges = asyncHandler(async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        const userBadges = user.badges || [];
-        
-        const badges = {
-            earned: userBadges.map(badgeId => BADGES[badgeId.toUpperCase()]).filter(Boolean),
-            available: Object.values(BADGES).filter(badge => 
-                !userBadges.includes(badge.id.toLowerCase())
-            ),
-            totalEarned: userBadges.length,
-            totalAvailable: Object.keys(BADGES).length
-        };
-        
-        res.status(200).json({
-            success: true,
-            data: badges
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user badges',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
@@ -501,77 +418,105 @@ export const getSubjectProgress = asyncHandler(async (req, res) => {
 // @access  Private
 export const getContinueLearning = asyncHandler(async (req, res) => {
     const userId = req.user._id;
+    console.log('Finding continue learning content for user:', userId);
 
     try {
-        // 1. Find subjects with the lowest average quiz scores for the user
-        const subjectsByPerformance = await QuizScore.aggregate([
-            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-            { $group: {
-                _id: "$subjectId",
-                averageScore: { $avg: "$score" }
-            }},
-            { $sort: { averageScore: 1 } } // Sort by lowest average score first
-        ]);
+        // 1. Get all videos that the user has attempted quizzes for
+        const attemptedVideoIds = await QuizScore.find({ userId: userId }).distinct('videoId');
+        console.log('Attempted video IDs:', attemptedVideoIds);
 
-        let nextContent = null;
+        // 2. Find a video that hasn't been attempted yet
+        const nextVideo = await Video.findOne({
+            _id: { $nin: attemptedVideoIds }
+        }).lean();
+        console.log('Next video found:', nextVideo);
 
-        // Iterate through subjects, starting with those with lower scores
-        for (const subjectPerformance of subjectsByPerformance) {
-            const subjectId = subjectPerformance._id;
+        if (nextVideo) {
+            // 3. Get the curriculum path for this video
+            const [subject, chapter, topic, subtopic] = await Promise.all([
+                Subject.findOne({ subject: nextVideo.subName }).lean(),
+                Chapter.findOne({ chapter_name: nextVideo.chapterName }).lean(),
+                Topic.findOne({ topicName: nextVideo.topicName }).lean(),
+                Subtopic.findOne({ subtopic_name: nextVideo.subtopicName }).lean()
+            ]);
+            console.log('Curriculum path:', { subject, chapter, topic, subtopic });
 
-            // Find a video within this subject that the user hasn't attempted a quiz for
-            const attemptedQuizVideoIds = await QuizScore.find({ userId: userId, subjectId: subjectId }).distinct('videoId');
+            // 4. Get user's performance in this subject if they have any
+            const subjectPerformance = await QuizScore.aggregate([
+                { $match: { 
+                    userId: new mongoose.Types.ObjectId(userId),
+                    subjectId: subject?._id 
+                }},
+                { $group: {
+                    _id: null,
+                    averageScore: { $avg: "$score" },
+                    totalQuizzes: { $sum: 1 }
+                }}
+            ]);
+            console.log('Subject performance:', subjectPerformance);
 
-            const nextVideo = await Video.findOne({
-                subjectId: subjectId,
-                // Find videos whose _id is NOT in the list of attempted quiz videoIds
-                _id: { $nin: attemptedQuizVideoIds }
-            }).lean(); // Use lean() for better performance
+            const nextContent = {
+                type: 'video',
+                videoId: nextVideo._id,
+                videoUrl: nextVideo.video_url,
+                title: nextVideo.title || `Video on ${subtopic?.subtopic_name || topic?.topic_name || 'a topic'}`,
+                curriculumPath: {
+                    subject: subject?.subject,
+                    chapter: chapter?.chapter_name,
+                    topic: topic?.topic_name,
+                    subtopic: subtopic?.subtopic_name
+                },
+                subjectPerformance: subjectPerformance[0] ? {
+                    averageScore: Math.round(subjectPerformance[0].averageScore * 100) / 100,
+                    totalQuizzes: subjectPerformance[0].totalQuizzes
+                } : null
+            };
 
-            if (nextVideo) {
-                // Found a video the user hasn't attempted a quiz for
-                 // Populate curriculum path for the response
-                const subtopic = await Subtopic.findById(nextVideo.subtopicId).lean();
-                const topic = await Topic.findById(nextVideo.topicId).lean();
-                const chapter = await Chapter.findById(nextVideo.chapterId).lean();
-                const subject = await Subject.findById(nextVideo.subjectId).lean();
-
-                nextContent = {
-                    type: 'video',
-                    videoId: nextVideo._id,
-                    videoUrl: nextVideo.video_url,
-                    title: `Video on ${subtopic?.subtopic_name || topic?.topic_name || 'a topic'}`,
-                    curriculumPath: {
-                        subject: subject?.subName,
-                        chapter: chapter?.chapter_name,
-                        topic: topic?.topic_name,
-                        subtopic: subtopic?.subtopic_name
-                    }
-                };
-                break; // Found content, stop searching
-            }
-        }
-
-        if (nextContent) {
             res.status(200).json({
                 success: true,
                 message: 'Suggested content for you to continue learning:',
                 data: nextContent
             });
         } else {
-            // If no unattempted videos found, suggest the subject with the lowest score or a random subject
-             const suggestedSubjectId = subjectsByPerformance.length > 0 ? subjectsByPerformance[0]._id : null;
-             let suggestedSubjectName = 'a subject';
-             if (suggestedSubjectId) {
-                 const subject = await Subject.findById(suggestedSubjectId);
-                 suggestedSubjectName = subject ? subject.subName : suggestedSubjectName;
-             }
+            // If no unattempted videos found, find the subject with lowest performance
+            const subjectPerformance = await QuizScore.aggregate([
+                { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+                { $group: {
+                    _id: "$subjectId",
+                    subjectName: { $first: "$subjectName" },
+                    averageScore: { $avg: "$score" },
+                    totalQuizzes: { $sum: 1 }
+                }},
+                { $sort: { averageScore: 1 } },
+                { $limit: 1 }
+            ]);
+            console.log('Subject performance for review:', subjectPerformance);
 
-            res.status(200).json({
-                success: true,
-                message: `You've attempted quizzes for all available videos. Consider reviewing content in ${suggestedSubjectName}.`,
-                data: null
-            });
+            // Check if there are any videos in the database
+            const totalVideos = await Video.countDocuments();
+            console.log('Total videos in database:', totalVideos);
+
+            if (subjectPerformance.length > 0) {
+                const subject = subjectPerformance[0];
+                res.status(200).json({
+                    success: true,
+                    message: `You've completed all available videos. Consider reviewing ${subject.subjectName} where your average score is ${Math.round(subject.averageScore * 100) / 100}% across ${subject.totalQuizzes} quizzes.`,
+                    data: {
+                        type: 'review',
+                        subject: {
+                            name: subject.subjectName,
+                            averageScore: Math.round(subject.averageScore * 100) / 100,
+                            totalQuizzes: subject.totalQuizzes
+                        }
+                    }
+                });
+            } else {
+                res.status(200).json({
+                    success: true,
+                    message: 'No learning history found. Start your learning journey!',
+                    data: null
+                });
+            }
         }
 
     } catch (error) {
@@ -621,62 +566,6 @@ const generateFunFacts = async (user) => {
             "Every quiz completed is a step towards mastery",
             "Keep up the excellent work!"
         ];
-    }
-};
-
-// Helper function to check and award badges
-export const checkAndAwardBadges = async (user) => {
-    try {
-        console.log('Inside checkAndAwardBadges function');
-        console.log('User object received:', user);
-        const newBadges = [];
-        
-        // Quick Learner check
-        const todayQuizzes = user.quizzesTaken?.filter(quiz => 
-            quiz.date.toDateString() === new Date().toDateString()
-        ).length || 0;
-        if (todayQuizzes >= 5 && !user.badges?.includes(BADGES.QUICK_LEARNER?.id)) {
-            newBadges.push(BADGES.QUICK_LEARNER.id);
-        }
-        
-        // Streak Master check
-        if (user.currentStreak >= 7 && !user.badges?.includes(BADGES.STREAK_MASTER?.id)) {
-            newBadges.push(BADGES.STREAK_MASTER.id);
-        }
-        
-        // Perfect Score check
-        const hasPerfectScore = user.quizzesTaken?.some(quiz => quiz.score === 100);
-        if (hasPerfectScore && !user.badges?.includes(BADGES.PERFECT_SCORE?.id)) {
-            newBadges.push(BADGES.PERFECT_SCORE.id);
-        }
-        
-        // Knowledge Explorer check
-        const uniqueTopics = new Set(user.quizzesTaken?.map(quiz => quiz.topic) || []).size;
-        if (uniqueTopics >= 5 && !user.badges?.includes(BADGES.KNOWLEDGE_EXPLORER?.id)) {
-            newBadges.push(BADGES.KNOWLEDGE_EXPLORER.id);
-        }
-        
-        // Speed Demon check
-        const hasSpeedQuiz = user.quizzesTaken?.some(quiz => 
-            quiz.duration <= 120 && quiz.score >= 80
-        );
-        if (hasSpeedQuiz && !user.badges?.includes(BADGES.SPEED_DEMON?.id)) {
-            newBadges.push(BADGES.SPEED_DEMON.id);
-        }
-        
-        console.log('New badges to potentially award:', newBadges);
-
-        // Award new badges
-        if (newBadges.length > 0) {
-            await User.findByIdAndUpdate(user._id, {
-                $addToSet: { badges: { $each: newBadges } }
-            });
-        }
-        
-        return newBadges;
-    } catch (error) {
-        console.error('Error checking and awarding badges:', error);
-        return [];
     }
 };
 
