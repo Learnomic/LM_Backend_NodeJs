@@ -332,33 +332,37 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
 
         console.log('Found subject:', subject.subject, 'with ID:', subject._id);
 
-        // Fetch all chapters, topics, subtopics, and videos related to this subject
-        console.log('Attempting to find chapters for subject name:', subject.subject);
+        // Fetch all chapters for this subject
         const chapters = await Chapter.find({ subject: subject.subject });
         console.log('Chapters found:', chapters);
 
         const curriculum = {
             _id: subject._id,
-            subjectName: subject.subName,
+            subjectName: subject.subject,
+            board: subject.board,
+            grade: subject.grade,
             chapters: []
         };
 
         for (const chapter of chapters) {
-            const topics = await Topic.find({ chapterId: chapter._id });
+            const topics = await Topic.find({ 
+                subjectId: subject._id,
+                chapterId: chapter._id 
+            });
+            
             const chapterData = {
                 _id: chapter._id,
-                chapterName: chapter.chapter_name,
+                chapterName: chapter.chapterName,
                 topics: []
             };
 
             for (const topic of topics) {
-                console.log('Attempting to find subtopics for topic:', topic.topicName, 'in chapter:', chapter.chapterName, 'subject:', subject.subject);
                 const subtopics = await Subtopic.find({
                     subName: subject.subject,
                     chapterName: chapter.chapterName,
                     topicName: topic.topicName
                 });
-                console.log('Subtopics found:', subtopics);
+
                 const topicData = {
                     _id: topic._id,
                     topicName: topic.topicName,
@@ -366,14 +370,13 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
                 };
 
                 for (const subtopic of subtopics) {
-                    console.log('Attempting to find videos for subtopic:', subtopic.subtopicName, 'in topic:', topic.topicName, 'chapter:', chapter.chapterName, 'subject:', subject.subject);
                     const videos = await Video.find({
                         subName: subject.subject,
                         chapterName: chapter.chapterName,
                         topicName: topic.topicName,
                         subtopicName: subtopic.subtopicName
                     });
-                    console.log('Videos found:', videos);
+
                     const subtopicData = {
                         _id: subtopic._id,
                         subtopicName: subtopic.subtopicName,
@@ -399,6 +402,54 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch curriculum',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// @desc    Add video to a subtopic
+// @route   POST /api/curriculum/video
+// @access  Private/Admin
+export const addVideo = asyncHandler(async (req, res) => {
+    try {
+        const {
+            subName,
+            chapterName,
+            topicName,
+            subtopicName,
+            videoUrl
+        } = req.body;
+
+        // Validate required fields
+        if (!subName || !chapterName || !topicName || !subtopicName || !videoUrl) {
+            return res.status(400).json({
+                success: false,
+                message: 'Please provide all required fields: subName, chapterName, topicName, subtopicName, videoUrl'
+            });
+        }
+
+        // Create new video
+        const video = new Video({
+            subName,
+            chapterName,
+            topicName,
+            subtopicName,
+            videoUrl
+        });
+
+        const savedVideo = await video.save();
+
+        res.status(201).json({
+            success: true,
+            message: 'Video added successfully',
+            data: savedVideo
+        });
+
+    } catch (error) {
+        console.error('Error adding video:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to add video',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }

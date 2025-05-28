@@ -27,7 +27,7 @@ const quizScoreSchema = new mongoose.Schema({
         required: true
     },
     videoId: {
-        type: String, // As per desired format
+        type: String,
         required: true
     },
     subjectId: {
@@ -35,13 +35,13 @@ const quizScoreSchema = new mongoose.Schema({
         ref: 'Subject',
         required: true
     },
+    subjectName: {
+        type: String,
+        required: true
+    },
     topicId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Topic',
-        required: true
-    },
-    subjectName: {
-        type: String,
         required: true
     },
     topicName: {
@@ -50,11 +50,11 @@ const quizScoreSchema = new mongoose.Schema({
     },
     chapterName: {
         type: String,
-        default: null // Can be null
+        default: null
     },
     subtopicName: {
         type: String,
-        required: true
+        default: null
     },
     score: {
         type: Number,
@@ -68,10 +68,6 @@ const quizScoreSchema = new mongoose.Schema({
         type: Number,
         required: true
     },
-    wrongAnswers: {
-        type: Number,
-        required: true
-    },
     answers: {
         type: [answerSchema],
         required: true
@@ -82,12 +78,12 @@ const quizScoreSchema = new mongoose.Schema({
     },
     completed: {
         type: Boolean,
-        default: true // Assuming submission means completed
+        default: true
     }
 }, {
-    timestamps: true // Adds createdAt and updatedAt (which can serve as timestamp)
+    timestamps: true
 });
 
-const QuizScore = mongoose.model('QuizScore', quizScoreSchema, 'QuizScores'); // Specify collection name
+const QuizScore = mongoose.model('QuizScore', quizScoreSchema, 'QuizScores');
 
 export default QuizScore; 

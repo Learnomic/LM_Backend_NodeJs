@@ -6,6 +6,7 @@ import Video from '../models/Video.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import mongoose from 'mongoose';
+import Subtopic from '../models/Subtopic.js';
 
 // Get quiz by video URL
 export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
@@ -20,6 +21,7 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
     }
 
     try {
+        // Find the quiz
         const quiz = await Quiz.findOne({ videoUrl: videoUrl.trim() });
         console.log('Quiz found:', quiz);
 
@@ -30,9 +32,44 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
             });
         }
 
+        // Find the video using the videoId from the quiz
+        const video = await Video.findById(quiz.videoId);
+        console.log('Video found by ID:', video);
+
+        // Prepare the response with or without subject information
+        const response = {
+            _id: quiz._id,
+            videoUrl: quiz.videoUrl,
+            videoId: quiz.videoId,
+            questions: quiz.questions
+        };
+
+        // If video is found, get subject information
+        if (video) {
+            response.subject = {
+                name: video.subName,
+                chapterName: video.chapterName,
+                topicName: video.topicName,
+                subtopicName: video.subtopicName
+            };
+        } else {
+            // If video not found by ID, try to find it by URL
+            const videoByUrl = await Video.findOne({ videoUrl: videoUrl.trim() });
+            console.log('Video found by URL:', videoByUrl);
+
+            if (videoByUrl) {
+                response.subject = {
+                    name: videoByUrl.subName,
+                    chapterName: videoByUrl.chapterName,
+                    topicName: videoByUrl.topicName,
+                    subtopicName: videoByUrl.subtopicName
+                };
+            }
+        }
+
         res.status(200).json({
             success: true,
-            data: quiz
+            data: response
         });
     } catch (error) {
         console.error('Error fetching quiz:', error);
@@ -47,18 +84,43 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
 // Submit quiz
 export const submitQuiz = asyncHandler(async (req, res) => {
     const {
-        userId,
+        quizId,
         videoId,
-        score,
+        subjectId,
+        subjectName,
+        topicId,
+        topicName,
+        chapterName,
+        subtopicName,
         totalQuestions,
         correctAnswers,
+        score,
         timeSpent,
         answers
     } = req.body;
 
+    // Get userId from authenticated user
+    const userId = req.user._id;
+
+    console.log('Received quiz submission:', {
+        userId,
+        quizId,
+        videoId,
+        subjectId,
+        subjectName,
+        topicId,
+        topicName,
+        totalQuestions,
+        correctAnswers,
+        score,
+        timeSpent
+    });
+
     try {
-        // Find the video to get curriculum information
+        // Find the video to verify it exists
         const video = await Video.findById(videoId);
+        console.log('Found video:', video);
+        
         if (!video) {
             return res.status(404).json({
                 success: false,
@@ -66,53 +128,113 @@ export const submitQuiz = asyncHandler(async (req, res) => {
             });
         }
 
-        // Find the subject and topic based on the video's curriculum path
-        const subject = await Subject.findOne({ subject: video.subName });
-        if (!subject) {
-            return res.status(404).json({
-                success: false,
-                message: 'Subject not found'
-            });
-        }
+        // Calculate points and experience
+        const pointsEarned = Math.round(score * 10); // 10 points per percentage point
+        const experienceEarned = Math.round(score * 5); // 5 XP per percentage point
 
-        const topic = await Topic.findOne({ topicName: video.topicName });
-        if (!topic) {
-            return res.status(404).json({
-                success: false,
-                message: 'Topic not found'
-            });
-        }
+        console.log('Calculated rewards:', {
+            pointsEarned,
+            experienceEarned
+        });
 
         // Create new quiz score
         const quizScore = new QuizScore({
             userId,
+            quizId,
             videoId,
-            subjectId: subject._id,
-            subjectName: subject.subject,
-            topicId: topic._id,
-            topicName: topic.topicName,
-            score,
+            subjectId,
+            subjectName,
+            topicId,
+            topicName,
+            chapterName,
+            subtopicName,
             totalQuestions,
             correctAnswers,
+            score,
             timeSpent,
             answers
         });
 
-        // Save the quiz score
-        await quizScore.save();
+        console.log('Created quiz score object:', quizScore);
 
-        // Update user's total time spent
-        await User.findByIdAndUpdate(userId, {
-            $inc: { totalTimeSpent: timeSpent }
+        // Save the quiz score
+        const savedQuizScore = await quizScore.save();
+        console.log('Saved quiz score:', savedQuizScore);
+
+        // Get current user data
+        const user = await User.findById(userId);
+        console.log('Found user:', user);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Calculate new streak
+        const today = new Date();
+        const lastActivity = user.updatedAt;
+        const daysSinceLastActivity = Math.floor((today - lastActivity) / (1000 * 60 * 60 * 24));
+        
+        let newCurrentStreak = user.currentStreak;
+        let newLongestStreak = user.longestStreak;
+
+        if (daysSinceLastActivity <= 1) {
+            // Activity within 24 hours, increment streak
+            newCurrentStreak += 1;
+            if (newCurrentStreak > user.longestStreak) {
+                newLongestStreak = newCurrentStreak;
+            }
+        } else {
+            // Activity after 24 hours, reset streak
+            newCurrentStreak = 1;
+        }
+
+        console.log('Calculated streaks:', {
+            daysSinceLastActivity,
+            newCurrentStreak,
+            newLongestStreak
         });
+
+        // Update user stats
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            {
+                $inc: { 
+                    totalTimeSpent: timeSpent,
+                    totalPoints: pointsEarned,
+                    experience: experienceEarned
+                },
+                $set: {
+                    currentStreak: newCurrentStreak,
+                    longestStreak: newLongestStreak
+                },
+                $addToSet: { completedVideos: videoId }
+            },
+            { new: true } // Return the updated document
+        );
+        console.log('Updated user:', updatedUser);
 
         res.status(201).json({
             success: true,
             message: 'Quiz submitted successfully',
-            data: quizScore
+            data: {
+                quizScore: savedQuizScore,
+                stats: {
+                    pointsEarned,
+                    experienceEarned,
+                    newCurrentStreak,
+                    newLongestStreak
+                }
+            }
         });
     } catch (error) {
-        console.error('Error submitting quiz:', error);
+        console.error('Detailed error in submitQuiz:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name
+        });
         res.status(500).json({
             success: false,
             message: 'Error submitting quiz',
