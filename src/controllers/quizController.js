@@ -95,16 +95,33 @@ export const submitQuiz = async (req, res) => {
     // 6. Create and store quiz score document
     const quizScore = new QuizScore(quizScoreData);
 
+    // 7. Save the quiz score
+    console.log('Saving quiz score:', quizScore);
     await quizScore.save();
+    console.log('Quiz score saved successfully.');
 
-    // After successfully saving the quiz score, check and award badges
-    // Fetch the updated user document to pass to checkAndAwardBadges
-    const user = await User.findById(submissionUserId);
-    if (user) {
-      await checkAndAwardBadges(user);
+    // 8. Check and award badges
+    console.log('Calling checkAndAwardBadges for user:', submissionUserId);
+    // Fetch the updated user document after saving the quiz score
+    const updatedUser = await User.findById(submissionUserId);
+    if (updatedUser) {
+      console.log('User document before badge check:', updatedUser);
+      const awardedBadges = await checkAndAwardBadges(updatedUser);
+      console.log('Awarded badges:', awardedBadges);
+
+      // Mark video as completed
+      if (videoId && !updatedUser.completedVideos.includes(videoId)) {
+        updatedUser.completedVideos.push(videoId);
+        await updatedUser.save();
+        console.log(`Video ${videoId} marked as completed for user ${submissionUserId}`);
+      }
+
+      // The checkAndAwardBadges function updates the user document directly
+    } else {
+      console.warn('User not found after saving quiz score.');
     }
 
-    // 7. Send success response in the desired format
+    // 9. Send success response in the desired format
     const responseBody = {
       _id: quizScore._id,
       userId: quizScore.userId,

@@ -19,7 +19,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use('/api', curriculumRoutes);
+app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api',QuizRoutes);
 app.use('/api', dashboardRoutes); // ✅ Use dashboardRoutes for /dashboard endpoint

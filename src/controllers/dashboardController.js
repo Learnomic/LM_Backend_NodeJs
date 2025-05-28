@@ -49,7 +49,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 { $sort: { averageScore: -1 } },
                 { $limit: 10 },
                 { $lookup: {
-                    from: 'users',
+                    from: 'Users',
                     localField: '_id',
                     foreignField: '_id',
                     as: 'userDetails'
@@ -92,9 +92,11 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
 
         console.log('Successfully fetched initial data');
         console.log('Quiz scores count:', quizScores.length);
-        console.log('Leaderboard data count:', leaderboardData.length);
+        console.log('First few quizScore userIds:', quizScores.slice(0, 3).map(qs => qs.userId));
+        console.log('Leaderboard data:', leaderboardData);
         console.log('Subject progress count:', subjectProgress.length);
         console.log('User found:', !!user);
+        console.log('User badges array:', user?.badges);
 
         // Calculate quiz statistics using quizScores
         const totalQuizzes = quizScores.length;
@@ -636,6 +638,8 @@ const generateFunFacts = async (user) => {
 // Helper function to check and award badges
 export const checkAndAwardBadges = async (user) => {
     try {
+        console.log('Inside checkAndAwardBadges function');
+        console.log('User object received:', user);
         const newBadges = [];
         
         // Quick Learner check
@@ -671,6 +675,8 @@ export const checkAndAwardBadges = async (user) => {
             newBadges.push(BADGES.SPEED_DEMON.id);
         }
         
+        console.log('New badges to potentially award:', newBadges);
+
         // Award new badges
         if (newBadges.length > 0) {
             await User.findByIdAndUpdate(user._id, {

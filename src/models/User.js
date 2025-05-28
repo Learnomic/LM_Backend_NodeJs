@@ -35,6 +35,34 @@ const UserSchema = new mongoose.Schema({
   },
   pincode: {
     type: String
+  },
+  badges: {
+    type: [String],
+    default: []
+  },
+  totalTimeSpent: {
+    type: Number,
+    default: 0
+  },
+  currentStreak: {
+    type: Number,
+    default: 0
+  },
+  longestStreak: {
+    type: Number,
+    default: 0
+  },
+  totalPoints: {
+    type: Number,
+    default: 0
+  },
+  experience: {
+    type: Number,
+    default: 0
+  },
+  completedVideos: {
+    type: [String],
+    default: []
   }
 }, {
   collection: 'Users', // Explicitly set collection name

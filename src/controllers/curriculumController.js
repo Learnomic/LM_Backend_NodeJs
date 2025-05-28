@@ -331,3 +331,91 @@ export const addTestSubject = asyncHandler(async (req, res) => {
         });
     }
 });
+
+// @desc    Get curriculum by subject name
+// @route   GET /api/curriculum/:subjectName
+// @access  Public (or Private if needed)
+export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
+    const { subjectName } = req.params;
+
+    try {
+        // Find the subject by name
+        const subject = await Subject.findOne({ subject: subjectName });
+
+        if (!subject) {
+            return res.status(404).json({ message: 'Subject not found' });
+        }
+
+        console.log('Found subject:', subject.subject, 'with ID:', subject._id);
+
+        // Fetch all chapters, topics, subtopics, and videos related to this subject
+        console.log('Attempting to find chapters for subject name:', subject.subject);
+        const chapters = await Chapter.find({ subject: subject.subject });
+        console.log('Chapters found:', chapters);
+
+        const curriculum = {
+            _id: subject._id,
+            subjectName: subject.subName,
+            chapters: []
+        };
+
+        for (const chapter of chapters) {
+            const topics = await Topic.find({ chapterId: chapter._id });
+            const chapterData = {
+                _id: chapter._id,
+                chapterName: chapter.chapter_name,
+                topics: []
+            };
+
+            for (const topic of topics) {
+                console.log('Attempting to find subtopics for topic:', topic.topicName, 'in chapter:', chapter.chapterName, 'subject:', subject.subject);
+                const subtopics = await Subtopic.find({
+                    subName: subject.subject,
+                    chapterName: chapter.chapterName,
+                    topicName: topic.topicName
+                });
+                console.log('Subtopics found:', subtopics);
+                const topicData = {
+                    _id: topic._id,
+                    topicName: topic.topicName,
+                    subtopics: []
+                };
+
+                for (const subtopic of subtopics) {
+                    console.log('Attempting to find videos for subtopic:', subtopic.subtopicName, 'in topic:', topic.topicName, 'chapter:', chapter.chapterName, 'subject:', subject.subject);
+                    const videos = await Video.find({
+                        subName: subject.subject,
+                        chapterName: chapter.chapterName,
+                        topicName: topic.topicName,
+                        subtopicName: subtopic.subtopicName
+                    });
+                    console.log('Videos found:', videos);
+                    const subtopicData = {
+                        _id: subtopic._id,
+                        subtopicName: subtopic.subtopicName,
+                        videos: videos.map(video => ({
+                            _id: video._id,
+                            videoUrl: video.videoUrl
+                        }))
+                    };
+                    topicData.subtopics.push(subtopicData);
+                }
+                chapterData.topics.push(topicData);
+            }
+            curriculum.chapters.push(chapterData);
+        }
+
+        res.status(200).json({
+            success: true,
+            data: curriculum
+        });
+
+    } catch (error) {
+        console.error('Error fetching curriculum:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch curriculum',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});

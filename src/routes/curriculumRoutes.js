@@ -1,6 +1,6 @@
 import express from 'express';
 const router = express.Router();
-import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, postCurriculum, postQuiz, getCompleteContent, addTestSubject } from '../controllers/curriculumController.js';
+import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, postCurriculum, postQuiz, getCompleteContent, addTestSubject, getCurriculumBySubjectName } from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
 
 // Public or Protected Routes (depending on if content is public)
@@ -20,5 +20,10 @@ router.post('/admin/quiz', protect, postQuiz); // This might need some changes
 
 // Test route to add a subject
 router.post('/test', protect, addTestSubject);
+
+// @desc    Get curriculum by subject name
+// @route   GET /api/curriculum/:subjectName
+// @access  Public (or Private if needed)
+router.get('/:subjectName', getCurriculumBySubjectName);
 
 export default router;
