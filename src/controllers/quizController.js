@@ -3,7 +3,9 @@ import Video from '../models/Video.js';
 import Quiz from '../models/Quiz.js';
 import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
+import User from '../models/User.js';
 import { validationResult } from 'express-validator';
+import { checkAndAwardBadges } from './dashboardController.js'; // Import checkAndAwardBadges
 
 // Assuming you use express-validator for validation in routes
 
@@ -94,6 +96,13 @@ export const submitQuiz = async (req, res) => {
     const quizScore = new QuizScore(quizScoreData);
 
     await quizScore.save();
+
+    // After successfully saving the quiz score, check and award badges
+    // Fetch the updated user document to pass to checkAndAwardBadges
+    const user = await User.findById(submissionUserId);
+    if (user) {
+      await checkAndAwardBadges(user);
+    }
 
     // 7. Send success response in the desired format
     const responseBody = {

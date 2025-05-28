@@ -1,9 +1,7 @@
 import asyncHandler from 'express-async-handler';
-import User from '../models/userModel.js';
-import Achievement from '../models/achievementModel.js';
+import User from '../models/User.js';
 import Badge from '../models/badgeModel.js';
 import FunFact from '../models/funFactModel.js';
-import QuizHistory from '../models/quizHistoryModel.js';
 import Leaderboard from '../models/leaderboardModel.js';
 import SubjectProgress from '../models/subjectProgressModel.js';
 import { BADGES, ACHIEVEMENTS } from '../constants/rewards.js';
@@ -31,149 +29,211 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
     try {
+        console.log('Fetching dashboard data for user:', userId);
+
         // Fetch all required data in parallel for better performance
         const [
-            quizHistory,
-            achievements,
-            badges,
-            funFacts,
-            leaderboard,
+            quizScores,
+            leaderboardData,
             subjectProgress,
             user
         ] = await Promise.all([
-            QuizHistory.find({ user: userId }).sort({ createdAt: -1 }),
-            Achievement.find({ user: userId }),
-            Badge.find({ user: userId }),
-            FunFact.find().limit(5), // Limit to 5 random fun facts
-            Leaderboard.find().sort({ score: -1 }).limit(10).populate('user', 'name email'),
-            SubjectProgress.find({ user: userId }),
+            QuizScore.find({ userId: userId }).sort({ createdAt: -1 }),
+            QuizScore.aggregate([
+                { $group: {
+                    _id: "$userId",
+                    totalQuizzes: { $sum: 1 },
+                    averageScore: { $avg: "$score" },
+                    totalScore: { $sum: "$score" }
+                }},
+                { $sort: { averageScore: -1 } },
+                { $limit: 10 },
+                { $lookup: {
+                    from: 'users',
+                    localField: '_id',
+                    foreignField: '_id',
+                    as: 'userDetails'
+                }},
+                { $unwind: '$userDetails' },
+                { $project: {
+                    _id: 0,
+                    userId: '$_id',
+                    name: '$userDetails.name',
+                    totalQuizzes: 1,
+                    averageScore: { $round: ['$averageScore', 2] },
+                    totalScore: 1
+                }}
+            ]),
+            QuizScore.aggregate([
+                { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+                { $group: {
+                    _id: "$subjectId",
+                    subjectName: { $first: "$subjectName" },
+                    totalQuizzes: { $sum: 1 },
+                    averageScore: { $avg: "$score" },
+                    totalTimeSpent: { $sum: "$timeSpent" },
+                    completedTopics: { $addToSet: "$topicId" }
+                }},
+                { $project: {
+                    _id: 0,
+                    subjectId: "$_id",
+                    subjectName: 1,
+                    totalQuizzes: 1,
+                    averageScore: { $round: ["$averageScore", 2] },
+                    totalTimeSpent: 1,
+                    completedTopics: { $size: "$completedTopics" }
+                }}
+            ]),
             User.findById(userId)
-        ]);
+        ]).catch(error => {
+            console.error('Error in Promise.all:', error);
+            throw error;
+        });
 
-        // Calculate quiz statistics
-        const totalQuizzes = quizHistory.length;
-        const scores = quizHistory.map(q => q.score || 0);
+        console.log('Successfully fetched initial data');
+        console.log('Quiz scores count:', quizScores.length);
+        console.log('Leaderboard data count:', leaderboardData.length);
+        console.log('Subject progress count:', subjectProgress.length);
+        console.log('User found:', !!user);
+
+        // Calculate quiz statistics using quizScores
+        const totalQuizzes = quizScores.length;
+        const scores = quizScores.map(q => q.score || 0);
         const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
         const averageScore = totalQuizzes > 0 
             ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
             : 0;
 
-        // Get completed videos (you can modify this based on your video tracking logic)
+        // Get completed videos
         const completedVideos = user?.completedVideos?.length || 0;
 
-        // Prepare chart data with better structure
+        // Prepare chart data
         const chartData = {
             scoreDistribution: {
-                low: quizHistory.filter(q => q.score < 50).length,
-                mid: quizHistory.filter(q => q.score >= 50 && q.score < 80).length,
-                high: quizHistory.filter(q => q.score >= 80).length,
+                low: quizScores.filter(q => q.score < 50).length,
+                mid: quizScores.filter(q => q.score >= 50 && q.score < 80).length,
+                high: quizScores.filter(q => q.score >= 80).length,
             },
-            quizzesBySubject: quizHistory.reduce((acc, q) => {
-                const subject = q.subject || 'Unknown';
+            quizzesBySubject: quizScores.reduce((acc, q) => {
+                const subject = q.subjectName || 'Unknown';
                 acc[subject] = (acc[subject] || 0) + 1;
                 return acc;
             }, {}),
-            performanceOverTime: quizHistory.slice(-10).map(q => ({
+            performanceOverTime: quizScores.slice(-10).map(q => ({
                 date: q.createdAt,
                 score: q.score,
-                subject: q.subject
+                subject: q.subjectName
             })),
-            subjectPerformance: subjectProgress.map(sp => ({
-                subject: sp.subject,
-                progress: sp.progress,
-                totalTopics: sp.totalTopics,
-                completedTopics: sp.completedTopics
-            }))
+            subjectPerformance: subjectProgress
         };
 
-        // Get recent quiz history (last 5 quizzes)
-        const recentQuizHistory = quizHistory.slice(0, 5).map(quiz => ({
+        // Get recent quiz history
+        const recentQuizHistory = quizScores.slice(0, 5).map(quiz => ({
             id: quiz._id,
-            subject: quiz.subject,
+            subject: quiz.subjectName,
             score: quiz.score,
             totalQuestions: quiz.totalQuestions,
             correctAnswers: quiz.correctAnswers,
-            timeTaken: quiz.timeTaken,
+            timeTaken: quiz.timeSpent,
             date: quiz.createdAt,
-            difficulty: quiz.difficulty
+            topic: quiz.topicName,
+            subtopic: quiz.subtopicName
         }));
 
-        // Format achievements data
-        const formattedAchievements = achievements.map(ach => ({
-            id: ach._id,
-            name: ach.name,
-            description: ach.description,
-            type: ach.type,
-            progress: ach.progress,
-            maxProgress: ach.maxProgress,
-            completed: ach.completed,
-            dateEarned: ach.dateEarned,
-            icon: ach.icon
-        }));
+        // Calculate achievements progress
+        const achievementsWithProgress = Object.keys(ACHIEVEMENT_THRESHOLDS).map(key => {
+            const achievement = ACHIEVEMENT_THRESHOLDS[key];
+            let progress = 0;
+            let current = 0;
+
+            switch (key) {
+                case 'FIRST_STEPS':
+                case 'QUIZ_APPRENTICE':
+                case 'QUIZ_MASTER':
+                    current = quizScores.length;
+                    progress = Math.min(current / achievement.threshold, 1) * 100;
+                    break;
+                case 'PERFECT_SCORE':
+                    current = quizScores.filter(qs => qs.score === 100).length;
+                    progress = current >= achievement.threshold ? 100 : 0;
+                    break;
+                case 'HIGH_PERFORMER':
+                    current = averageScore;
+                    progress = Math.min(averageScore / achievement.threshold, 1) * 100;
+                    break;
+                case 'WEEKLY_WARRIOR':
+                    current = user?.currentStreak || 0;
+                    progress = Math.min(current / achievement.threshold, 1) * 100;
+                    break;
+            }
+
+            return {
+                name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                description: achievement.description,
+                progress: Math.round(progress),
+                current: current,
+                threshold: achievement.threshold,
+                unit: achievement.unit,
+                completed: current >= achievement.threshold,
+            };
+        });
 
         // Format badges data
-        const formattedBadges = badges.map(badge => ({
-            id: badge._id,
-            name: badge.name,
-            description: badge.description,
-            icon: badge.icon,
-            rarity: badge.rarity,
-            dateEarned: badge.dateEarned
-        }));
+        const userBadges = user?.badges || [];
+        const formattedBadges = userBadges.map(badgeId => BADGES[badgeId.toUpperCase()]).filter(Boolean);
 
         // Format fun facts
-        const formattedFunFacts = funFacts.map(fact => ({
-            id: fact._id,
-            text: fact.text,
-            category: fact.category,
-            icon: fact.icon
-        }));
+        const formattedFunFacts = [
+            { id: 1, text: "Did you know? The average human attention span is shorter than a goldfish's! Keep practicing!", category: "General", icon: "💡" },
+            { id: 2, text: "Solving quizzes boosts your brainpower by making new connections!", category: "Learning", icon: "🧠" },
+            { id: 3, text: "Regular practice, even short sessions, is more effective than cramming.", category: "Study Tips", icon: "📚" },
+            { id: 4, text: "Teaching others is a great way to solidify your own understanding.", category: "Study Tips", icon: "🤝" },
+            { id: 5, text: "Challenge yourself with topics you find difficult – that's where the biggest growth happens!", category: "Motivation", icon: "💪" }
+        ];
 
         // Format leaderboard
-        const formattedLeaderboard = leaderboard.map((entry, index) => ({
-            rank: index + 1,
-            userId: entry.user?._id,
-            name: entry.user?.name || 'Anonymous',
-            score: entry.score,
+        const formattedLeaderboard = leaderboardData.map(entry => ({
+            userId: entry.userId,
+            name: entry.name,
             totalQuizzes: entry.totalQuizzes,
             averageScore: entry.averageScore,
-            badges: entry.badges || []
+            totalScore: entry.totalScore
         }));
 
         // Format subject progress
         const formattedSubjectProgress = subjectProgress.map(sp => ({
-            subject: sp.subject,
-            progress: sp.progress,
-            totalTopics: sp.totalTopics,
-            completedTopics: sp.completedTopics,
-            lastStudied: sp.lastStudied,
-            timeSpent: sp.timeSpent,
-            averageScore: sp.averageScore
+            subjectId: sp.subjectId,
+            subjectName: sp.subjectName,
+            totalQuizzes: sp.totalQuizzes,
+            averageScore: sp.averageScore,
+            totalTimeSpent: sp.totalTimeSpent,
+            completedTopics: sp.completedTopics
         }));
 
-        // Combine all data into a single response with guaranteed fields
+        // Combine all data into a single response
         const dashboardData = {
             averageScore,
             highestScore,
             completedVideos,
             totalQuizzes,
-            achievements: formattedAchievements,
+            achievements: achievementsWithProgress,
             badges: formattedBadges,
             funFacts: formattedFunFacts,
             chartData,
             leaderboard: formattedLeaderboard,
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
-            // Additional useful metrics
             userStats: {
-                totalTimeSpent: user?.totalTimeSpent || 0,
-                currentStreak: user?.currentStreak || 0,
-                longestStreak: user?.longestStreak || 0,
-                totalPointsEarned: user?.totalPoints || 0,
-                level: user?.level || 1,
-                experience: user?.experience || 0
+                totalTimeSpent: 0,
+                currentStreak: 0,
+                longestStreak: 0,
+                totalPointsEarned: 0,
+                level: 1,
+                experience: 0
             }
         };
+
+        console.log('Successfully prepared dashboard data');
 
         res.status(200).json({
             success: true,
@@ -183,6 +243,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
 
     } catch (error) {
         console.error('Dashboard data fetch error:', error);
+        console.error('Error stack:', error.stack);
         res.status(500).json({
             success: false,
             message: 'Failed to fetch dashboard data',
@@ -404,7 +465,7 @@ export const getSubjectProgress = asyncHandler(async (req, res) => {
 
         // Fetch quiz scores for the user, grouped by subject
         const subjectProgressData = await QuizScore.aggregate([
-            { $match: { userId: mongoose.Types.ObjectId(userId) } },
+            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
             { $group: {
                 _id: "$subjectId",
                 totalQuizzes: { $sum: 1 },
@@ -453,7 +514,7 @@ export const getContinueLearning = asyncHandler(async (req, res) => {
     try {
         // 1. Find subjects with the lowest average quiz scores for the user
         const subjectsByPerformance = await QuizScore.aggregate([
-            { $match: { userId: mongoose.Types.ObjectId(userId) } },
+            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
             { $group: {
                 _id: "$subjectId",
                 averageScore: { $avg: "$score" }
@@ -548,7 +609,7 @@ const calculatePercentile = (user) => {
 
 const generateFunFacts = async (user) => {
     try {
-        const quizHistory = await QuizHistory.find({ user: user._id });
+        const quizHistory = await QuizScore.find({ user: user._id });
         const totalMinutes = Math.round((user.totalTimeSpent || 0) / 60);
         const totalQuizzes = quizHistory.length;
         const averageScore = totalQuizzes > 0 
