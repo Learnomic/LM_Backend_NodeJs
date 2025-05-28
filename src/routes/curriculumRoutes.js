@@ -6,7 +6,7 @@ import protect from '../middleware/authMiddleware.js'; // Assuming curriculum co
 // Public or Protected Routes (depending on if content is public)
 // For now, assuming protected
 router.get('/content', protect, getCompleteContent); // New route for complete content
-router.get('/subjects', getSubjects);
+router.get('/subjects', protect,getSubjects);
 router.get('/chapters/:subjectName', protect, getChapters);
 router.get('/topics/:chapterId', protect, getTopics);
 router.get('/subtopics/:topicId', protect, getSubtopics);
