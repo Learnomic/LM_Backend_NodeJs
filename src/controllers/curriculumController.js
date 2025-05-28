@@ -80,31 +80,42 @@ export const getCompleteContent = asyncHandler(async (req, res) => {
 // @access  Private
 export const getSubjects = asyncHandler(async (req, res) => {
     try {
-        // Get user's board and grade from the authenticated user
-        const { board, grade } = req.user;
+        // Get board and grade from query parameters (optional)
+        const { board, grade } = req.query;
 
-        console.log('User data:', req.user);
         console.log('Searching for subjects with:', { board, grade });
 
-        // Find subjects matching the criteria - using the user's board and handling string/numeric grade
-        const subjects = await Subject.find({
-            board: board, // Use the board value from req.user
-            $or: [
+        let query = {};
+
+        // Build query based on provided parameters
+        if (board) {
+            query.board = board;
+        }
+        if (grade) {
+             query.$or = [
                 { grade: grade },
-                { grade: grade.toString() }
-            ]
-        });
+                { grade: grade.toString() } // Handle both string and number grades
+            ];
+        }
+
+        // Find subjects matching the criteria
+        const subjects = await Subject.find(query);
 
         console.log('Found subjects:', subjects);
 
         if (!subjects || subjects.length === 0) {
-            return res.status(404).json({
-                message: 'No subjects found for your board and grade',
-                userDetails: {
-                    board,
-                    grade
-                }
-            });
+            // If filters were applied and no subjects found, indicate that.
+            if (board || grade) {
+                 return res.status(404).json({
+                     message: 'No subjects found for the specified board and grade',
+                     query: { board, grade }
+                 });
+            } else {
+                 // If no filters were applied and no subjects found at all.
+                 return res.status(404).json({
+                     message: 'No subjects found in the database'
+                 });
+            }
         }
 
         res.json(subjects);
@@ -303,33 +314,6 @@ export const postCurriculum = asyncHandler(async (req, res) => {
 export const postQuiz = asyncHandler(async (req, res) => {
      // This function might be adaptable with the new Quiz model
     res.status(501).json({ message: "Admin postQuiz needs review for new schema" });
-});
-
-// @desc    Add a test subject (for debugging)
-// @route   POST /api/subjects/test
-// @access  Private
-export const addTestSubject = asyncHandler(async (req, res) => {
-    try {
-        const testSubject = new Subject({
-            subject: "Mathematics",
-            board: "CBSE",
-            grade: "10"
-        });
-
-        const savedSubject = await testSubject.save();
-        console.log('Test subject saved:', savedSubject);
-
-        res.status(201).json({
-            message: 'Test subject added successfully',
-            subject: savedSubject
-        });
-    } catch (err) {
-        console.error('Error adding test subject:', err);
-        res.status(500).json({ 
-            error: err.message,
-            message: 'Error adding test subject'
-        });
-    }
 });
 
 // @desc    Get curriculum by subject name

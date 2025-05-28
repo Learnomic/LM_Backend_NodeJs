@@ -1,9 +1,5 @@
 import asyncHandler from 'express-async-handler';
 import User from '../models/User.js';
-import Badge from '../models/badgeModel.js';
-import FunFact from '../models/funFactModel.js';
-import Leaderboard from '../models/leaderboardModel.js';
-import SubjectProgress from '../models/subjectProgressModel.js';
 import { BADGES, ACHIEVEMENTS } from '../constants/rewards.js';
 import QuizScore from '../models/QuizScore.js';
 import mongoose from 'mongoose';
@@ -31,39 +27,46 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
     try {
         console.log('Fetching dashboard data for user:', userId);
 
-        // Fetch all required data in parallel for better performance
+        // Define the leaderboard aggregation pipeline
+        const leaderboardAggregationPipeline = [
+            { $match: { userId: { $ne: null } } }, // Filter out entries with null userId
+            { $group: {
+                _id: "$userId",
+                totalQuizzes: { $sum: 1 },
+                averageScore: { $avg: "$score" },
+                totalScore: { $sum: "$score" }
+            }},
+            { $sort: { averageScore: -1 } },
+            { $limit: 5 },
+            { $lookup: {
+                from: 'Users',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'userDetails'
+            }},
+            { $unwind: '$userDetails' },
+            { $project: {
+                _id: 0,
+                userId: '$_id',
+                name: '$userDetails.name',
+                totalQuizzes: 1,
+                averageScore: { $round: ['$averageScore', 2] },
+                totalScore: 1
+            }}
+        ];
+
+        console.log('Leaderboard aggregation pipeline defined:', JSON.stringify(leaderboardAggregationPipeline));
+
         const [
-            quizScores,
+            quizScoresCurrentUser,
             leaderboardData,
             subjectProgress,
             user
         ] = await Promise.all([
+            // Fetch quiz scores for the current user
             QuizScore.find({ userId: userId }).sort({ createdAt: -1 }),
-            QuizScore.aggregate([
-                { $group: {
-                    _id: "$userId",
-                    totalQuizzes: { $sum: 1 },
-                    averageScore: { $avg: "$score" },
-                    totalScore: { $sum: "$score" }
-                }},
-                { $sort: { averageScore: -1 } },
-                { $limit: 10 },
-                { $lookup: {
-                    from: 'Users',
-                    localField: '_id',
-                    foreignField: '_id',
-                    as: 'userDetails'
-                }},
-                { $unwind: '$userDetails' },
-                { $project: {
-                    _id: 0,
-                    userId: '$_id',
-                    name: '$userDetails.name',
-                    totalQuizzes: 1,
-                    averageScore: { $round: ['$averageScore', 2] },
-                    totalScore: 1
-                }}
-            ]),
+            // Execute aggregation for leaderboard
+            QuizScore.aggregate(leaderboardAggregationPipeline).exec(),
             QuizScore.aggregate([
                 { $match: { userId: new mongoose.Types.ObjectId(userId) } },
                 { $group: {
@@ -73,15 +76,6 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                     averageScore: { $avg: "$score" },
                     totalTimeSpent: { $sum: "$timeSpent" },
                     completedTopics: { $addToSet: "$topicId" }
-                }},
-                { $project: {
-                    _id: 0,
-                    subjectId: "$_id",
-                    subjectName: 1,
-                    totalQuizzes: 1,
-                    averageScore: { $round: ["$averageScore", 2] },
-                    totalTimeSpent: 1,
-                    completedTopics: { $size: "$completedTopics" }
                 }}
             ]),
             User.findById(userId)
@@ -91,16 +85,15 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         });
 
         console.log('Successfully fetched initial data');
-        console.log('Quiz scores count:', quizScores.length);
-        console.log('First few quizScore userIds:', quizScores.slice(0, 3).map(qs => qs.userId));
+        console.log('Quiz scores current user count:', quizScoresCurrentUser.length);
         console.log('Leaderboard data:', leaderboardData);
         console.log('Subject progress count:', subjectProgress.length);
         console.log('User found:', !!user);
         console.log('User badges array:', user?.badges);
 
-        // Calculate quiz statistics using quizScores
-        const totalQuizzes = quizScores.length;
-        const scores = quizScores.map(q => q.score || 0);
+        // Calculate quiz statistics using quizScoresCurrentUser
+        const totalQuizzes = quizScoresCurrentUser.length;
+        const scores = quizScoresCurrentUser.map(q => q.score || 0);
         const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
         const averageScore = totalQuizzes > 0 
             ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
@@ -112,16 +105,16 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         // Prepare chart data
         const chartData = {
             scoreDistribution: {
-                low: quizScores.filter(q => q.score < 50).length,
-                mid: quizScores.filter(q => q.score >= 50 && q.score < 80).length,
-                high: quizScores.filter(q => q.score >= 80).length,
+                low: quizScoresCurrentUser.filter(q => q.score < 50).length,
+                mid: quizScoresCurrentUser.filter(q => q.score >= 50 && q.score < 80).length,
+                high: quizScoresCurrentUser.filter(q => q.score >= 80).length,
             },
-            quizzesBySubject: quizScores.reduce((acc, q) => {
+            quizzesBySubject: quizScoresCurrentUser.reduce((acc, q) => {
                 const subject = q.subjectName || 'Unknown';
                 acc[subject] = (acc[subject] || 0) + 1;
                 return acc;
             }, {}),
-            performanceOverTime: quizScores.slice(-10).map(q => ({
+            performanceOverTime: quizScoresCurrentUser.slice(-10).map(q => ({
                 date: q.createdAt,
                 score: q.score,
                 subject: q.subjectName
@@ -130,7 +123,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         };
 
         // Get recent quiz history
-        const recentQuizHistory = quizScores.slice(0, 5).map(quiz => ({
+        const recentQuizHistory = quizScoresCurrentUser.slice(0, 5).map(quiz => ({
             id: quiz._id,
             subject: quiz.subjectName,
             score: quiz.score,
@@ -152,11 +145,11 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 case 'FIRST_STEPS':
                 case 'QUIZ_APPRENTICE':
                 case 'QUIZ_MASTER':
-                    current = quizScores.length;
+                    current = quizScoresCurrentUser.length;
                     progress = Math.min(current / achievement.threshold, 1) * 100;
                     break;
                 case 'PERFECT_SCORE':
-                    current = quizScores.filter(qs => qs.score === 100).length;
+                    current = quizScoresCurrentUser.filter(qs => qs.score === 100).length;
                     progress = current >= achievement.threshold ? 100 : 0;
                     break;
                 case 'HIGH_PERFORMER':
@@ -185,7 +178,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         const formattedBadges = userBadges.map(badgeId => BADGES[badgeId.toUpperCase()]).filter(Boolean);
 
         // Format fun facts
-        const formattedFunFacts = [
+        const formattedFunFacts = [ // Static fun facts
             { id: 1, text: "Did you know? The average human attention span is shorter than a goldfish's! Keep practicing!", category: "General", icon: "💡" },
             { id: 2, text: "Solving quizzes boosts your brainpower by making new connections!", category: "Learning", icon: "🧠" },
             { id: 3, text: "Regular practice, even short sessions, is more effective than cramming.", category: "Study Tips", icon: "📚" },
@@ -202,7 +195,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             totalScore: entry.totalScore
         }));
 
-        // Format subject progress
+        // Format subject progress (assuming subjectProgress is already in desired format from aggregation)
         const formattedSubjectProgress = subjectProgress.map(sp => ({
             subjectId: sp.subjectId,
             subjectName: sp.subjectName,
@@ -226,12 +219,12 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
             userStats: {
-                totalTimeSpent: 0,
-                currentStreak: 0,
-                longestStreak: 0,
-                totalPointsEarned: 0,
-                level: 1,
-                experience: 0
+                totalTimeSpent: user?.totalTimeSpent || 0,
+                currentStreak: user?.currentStreak || 0,
+                longestStreak: user?.longestStreak || 0,
+                totalPointsEarned: user?.totalPoints || 0,
+                level: user?.level || 1,
+                experience: user?.experience || 0
             }
         };
 
@@ -246,11 +239,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error('Dashboard data fetch error:', error);
         console.error('Error stack:', error.stack);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch dashboard data',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
+        res.status(500).json({ success: false, message: 'Failed to fetch dashboard data', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
     }
 });
 
