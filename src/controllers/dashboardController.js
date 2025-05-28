@@ -58,9 +58,96 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         console.log('Subject progress count:', subjectProgress.length);
         console.log('User found:', !!user);
 
+        // Calculate streak
+        const calculateStreak = (quizScores) => {
+            if (!quizScores || quizScores.length === 0) return { currentStreak: 0, longestStreak: 0 };
+
+            // Sort quiz scores by date in descending order
+            const sortedScores = [...quizScores].sort((a, b) => b.createdAt - a.createdAt);
+            
+            let currentStreak = 0;
+            let longestStreak = 0;
+            let tempStreak = 0;
+            let lastDate = null;
+
+            // Process each quiz score
+            for (const score of sortedScores) {
+                const quizDate = new Date(score.createdAt);
+                quizDate.setHours(0, 0, 0, 0); // Normalize to start of day
+
+                if (!lastDate) {
+                    // First quiz
+                    tempStreak = 1;
+                    lastDate = quizDate;
+                } else {
+                    const dayDiff = Math.floor((lastDate - quizDate) / (1000 * 60 * 60 * 24));
+                    
+                    if (dayDiff === 1) {
+                        // Consecutive day
+                        tempStreak++;
+                    } else if (dayDiff === 0) {
+                        // Same day, don't increment streak
+                        continue;
+                    } else {
+                        // Streak broken
+                        if (tempStreak > longestStreak) {
+                            longestStreak = tempStreak;
+                        }
+                        tempStreak = 1;
+                    }
+                    lastDate = quizDate;
+                }
+            }
+
+            // Update longest streak if current streak is longer
+            if (tempStreak > longestStreak) {
+                longestStreak = tempStreak;
+            }
+
+            // Check if the last activity was today or yesterday
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            const yesterday = new Date(today);
+            yesterday.setDate(yesterday.getDate() - 1);
+
+            if (lastDate && (lastDate.getTime() === today.getTime() || lastDate.getTime() === yesterday.getTime())) {
+                currentStreak = tempStreak;
+            } else {
+                currentStreak = 0;
+            }
+
+            return { currentStreak, longestStreak };
+        };
+
+        const { currentStreak, longestStreak } = calculateStreak(quizScoresCurrentUser);
+        console.log('Calculated streaks:', { currentStreak, longestStreak });
+
+        // Calculate total time spent from quiz scores
+        const totalTimeSpent = quizScoresCurrentUser.reduce((sum, quiz) => sum + (quiz.timeSpent || 0), 0);
+        
+        // Calculate total points earned from quiz scores (10 points per correct answer)
+        const totalPointsEarned = quizScoresCurrentUser.reduce((sum, quiz) => {
+            const correctAnswers = quiz.correctAnswers || 0;
+            return sum + (correctAnswers * 10);
+        }, 0);
+        
+        // Calculate total experience from quiz scores (5 XP per correct answer)
+        const totalExperience = quizScoresCurrentUser.reduce((sum, quiz) => {
+            const correctAnswers = quiz.correctAnswers || 0;
+            return sum + (correctAnswers * 5);
+        }, 0);
+
+        // Calculate level based on experience (1000 XP per level)
+        const level = Math.floor(totalExperience / 1000) + 1;
+
         // Calculate quiz statistics using quizScoresCurrentUser
         const totalQuizzes = quizScoresCurrentUser.length;
-        const scores = quizScoresCurrentUser.map(q => q.score || 0);
+        const scores = quizScoresCurrentUser.map(q => {
+            // Calculate score as percentage of correct answers
+            const correctAnswers = q.correctAnswers || 0;
+            const totalQuestions = q.totalQuestions || 1;
+            return (correctAnswers / totalQuestions) * 100;
+        });
         const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
         const averageScore = totalQuizzes > 0 
             ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
@@ -72,28 +159,53 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         // Prepare chart data
         const chartData = {
             scoreDistribution: {
-                low: quizScoresCurrentUser.filter(q => q.score < 50).length,
-                mid: quizScoresCurrentUser.filter(q => q.score >= 50 && q.score < 80).length,
-                high: quizScoresCurrentUser.filter(q => q.score >= 80).length,
+                low: quizScoresCurrentUser.filter(q => {
+                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    return score < 50;
+                }).length,
+                mid: quizScoresCurrentUser.filter(q => {
+                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    return score >= 50 && score < 80;
+                }).length,
+                high: quizScoresCurrentUser.filter(q => {
+                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    return score >= 80;
+                }).length,
             },
             quizzesBySubject: quizScoresCurrentUser.reduce((acc, q) => {
                 const subject = q.subjectName || 'Unknown';
                 acc[subject] = (acc[subject] || 0) + 1;
                 return acc;
             }, {}),
-            performanceOverTime: quizScoresCurrentUser.slice(-10).map(q => ({
-                date: q.createdAt,
-                score: q.score,
-                subject: q.subjectName
-            })),
-            subjectPerformance: subjectProgress
+            performanceOverTime: quizScoresCurrentUser
+                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort by date descending
+                .slice(0, 10) // Take the 10 most recent quizzes
+                .map(q => {
+                    // Calculate score as percentage of correct answers
+                    const correctAnswers = q.correctAnswers || 0;
+                    const totalQuestions = q.totalQuestions || 1;
+                    const score = Math.round((correctAnswers / totalQuestions) * 100);
+                    
+                    return {
+                        date: q.createdAt,
+                        score: score,
+                        subject: q.subjectName || 'Unknown',
+                        topic: q.topicName || 'Unknown',
+                        subtopic: q.subtopicName || 'Unknown'
+                    };
+                })
+                .reverse(), // Reverse to show oldest to newest
+            subjectPerformance: subjectProgress.map(sp => ({
+                ...sp,
+                averageScore: Math.round((sp.averageScore || 0) * 100) / 100 // Round to 2 decimal places
+            }))
         };
 
         // Get recent quiz history
         const recentQuizHistory = quizScoresCurrentUser.slice(0, 5).map(quiz => ({
             id: quiz._id,
             subject: quiz.subjectName,
-            score: quiz.score,
+            score: (quiz.correctAnswers / quiz.totalQuestions) * 100,
             totalQuestions: quiz.totalQuestions,
             correctAnswers: quiz.correctAnswers,
             timeTaken: quiz.timeSpent,
@@ -116,7 +228,10 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                     progress = Math.min(current / achievement.threshold, 1) * 100;
                     break;
                 case 'PERFECT_SCORE':
-                    current = quizScoresCurrentUser.filter(qs => qs.score === 100).length;
+                    current = quizScoresCurrentUser.filter(qs => {
+                        const score = (qs.correctAnswers / qs.totalQuestions) * 100;
+                        return score === 100;
+                    }).length;
                     progress = current >= achievement.threshold ? 100 : 0;
                     break;
                 case 'HIGH_PERFORMER':
@@ -124,7 +239,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                     progress = Math.min(averageScore / achievement.threshold, 1) * 100;
                     break;
                 case 'WEEKLY_WARRIOR':
-                    current = user?.currentStreak || 0;
+                    current = currentStreak;
                     progress = Math.min(current / achievement.threshold, 1) * 100;
                     break;
             }
@@ -171,16 +286,17 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
             userStats: {
-                totalTimeSpent: user?.totalTimeSpent || 0,
-                currentStreak: user?.currentStreak || 0,
-                longestStreak: user?.longestStreak || 0,
-                totalPointsEarned: user?.totalPoints || 0,
-                level: user?.level || 1,
-                experience: user?.experience || 0
+                totalTimeSpent: totalTimeSpent,
+                currentStreak: currentStreak,
+                longestStreak: longestStreak,
+                totalPointsEarned: totalPointsEarned,
+                level: level,
+                experience: totalExperience
             }
         };
 
         console.log('Successfully prepared dashboard data');
+        console.log('User stats:', dashboardData.userStats);
 
         res.status(200).json({
             success: true,
