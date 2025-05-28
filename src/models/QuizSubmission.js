@@ -26,7 +26,8 @@ const quizSubmissionSchema = new mongoose.Schema({
     required: true,
   },
   videoId: {
-    type: String,
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Video',
     required: true,
   },
     subject: {   // ✅ ADD THIS

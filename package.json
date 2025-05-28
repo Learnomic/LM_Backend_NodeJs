@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node app.js",
-    "dev": "node --watch app.js"
+    "dev": "node --watch app.js",
+    "add-subjects": "node src/scripts/addSubjects.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.2",

@@ -1,17 +1,18 @@
+import dotenv from 'dotenv';
+// Load environment variables first
+dotenv.config();
+
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
 import curriculumRoutes from './src/routes/curriculumRoutes.js';
-import dotenv from 'dotenv';
 import connectDB from "./src/config/db.js";
 import authRoutes from './src/routes/authRoutes.js';
 import QuizRoutes from './src/routes/quizRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
 
-
 // Connect to MongoDB
 connectDB();
-
 
 const app = express();
 const PORT = process.env.PORT || 5000;

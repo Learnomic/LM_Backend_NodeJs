@@ -1,12 +1,24 @@
 import express from 'express';
 const router = express.Router();
-import { getSubjects, getCurriculum, getQuiz, postCurriculum, postQuiz } from '../controllers/curriculumController.js';
+import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, postCurriculum, postQuiz, getCompleteContent, addTestSubject } from '../controllers/curriculumController.js';
+import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
 
-router.get('/subjects', getSubjects);
-router.get('/curriculum/:subjectId', getCurriculum);
-router.get('/quiz/:videoId', getQuiz);
-// router.post('/submit-quiz', submitQuiz);
-router.post('/admin/curriculum', postCurriculum);
-router.post('/admin/quiz', postQuiz);
+// Public or Protected Routes (depending on if content is public)
+// For now, assuming protected
+router.get('/content', protect, getCompleteContent); // New route for complete content
+router.get('/subjects', protect, getSubjects);
+router.get('/chapters/:subjectName', protect, getChapters);
+router.get('/topics/:chapterId', protect, getTopics);
+router.get('/subtopics/:topicId', protect, getSubtopics);
+router.get('/videos/:subtopicId', protect, getVideos);
+// Revert to original route definition to fix startup error
+router.get('/quiz/:videoId', protect, getQuiz); // Expect videoId parameter
+
+// Admin Routes
+router.post('/admin/curriculum', protect, postCurriculum); // These will need significant changes
+router.post('/admin/quiz', protect, postQuiz); // This might need some changes
+
+// Test route to add a subject
+router.post('/test', protect, addTestSubject);
 
 export default router;

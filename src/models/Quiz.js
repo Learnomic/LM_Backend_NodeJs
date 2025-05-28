@@ -2,20 +2,35 @@ import mongoose from 'mongoose';
 
 
 const quizSchema = new mongoose.Schema({
-    videoId: String,
+    videoId: {
+        type: String,
+        required: true
+    },
+    videoUrl: {
+        type: String,
+        required: true
+    },
     questions: [
         {
-            que: String,
+            que: {
+                type: String,
+                required: true
+            },
             opt: {
                 a: String,
                 b: String,
                 c: String,
                 d: String
             },
-            correctAnswer: String,
+            correctAnswer: {
+                type: String,
+                required: true
+            },
             explanation: String
         }
     ]
 });
 
-export default mongoose.model('Quiz', quizSchema);
+const Quiz = mongoose.model('Quiz', quizSchema, 'Quiz');
+
+export default Quiz;

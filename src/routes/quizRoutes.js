@@ -1,13 +1,13 @@
 import express from 'express';
-import { getLeaderboard, getUserQuizHistory, submitQuiz } from '../controllers/quizController.js';
+import { getUserQuizHistory, submitQuiz, getQuizByVideoUrl } from '../controllers/quizController.js';
 import protect from '../middleware/authMiddleware.js';
 import { submitQuizValidation } from '../middleware/submitQuizValidation.js';
 
 const router = express.Router();
 
-router.post('/submit', protect, submitQuizValidation, submitQuiz);
-router.get('/leaderboard/:quizId',protect, getLeaderboard);
-router.get('/history',protect, getUserQuizHistory);
+router.post('/submit_quiz', protect, submitQuiz);
+router.get('/user/quiz_history', protect, getUserQuizHistory);
+router.get('/quiz', getQuizByVideoUrl);
 
 
 export default router;

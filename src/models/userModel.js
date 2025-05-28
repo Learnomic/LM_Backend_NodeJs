@@ -15,6 +15,14 @@ const userSchema = mongoose.Schema(
             type: String,
             required: true,
         },
+        board: {
+            type: String,
+            required: true,
+        },
+        grade: {
+            type: Number,
+            required: true,
+        },
         isAdmin: {
             type: Boolean,
             default: false,
