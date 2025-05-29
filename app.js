@@ -25,6 +25,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api', QuizRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
+app.use('/api/videos', curriculumRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);

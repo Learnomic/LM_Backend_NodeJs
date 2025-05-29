@@ -1,6 +1,6 @@
 import express from 'express';
 const router = express.Router();
-import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, postCurriculum, postQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo } from '../controllers/curriculumController.js';
+import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, postCurriculum, postQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById } from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
 
 // Public or Protected Routes (depending on if content is public)
@@ -11,6 +11,9 @@ router.get('/chapters/:subjectName', protect, getChapters);
 router.get('/topics/:chapterId', protect, getTopics);
 router.get('/subtopics/:topicId', protect, getSubtopics);
 router.get('/videos/:subtopicId', protect, getVideos);
+router.get('/video/:videoId', protect, getVideoById); // Route for getting video by ID
+router.get('/:videoId', protect, getVideoById); // Route for getting video by ID (for /api/videos/:videoId)
+
 // Revert to original route definition to fix startup error
 router.get('/quiz/:videoId', protect, getQuiz); // Expect videoId parameter
 

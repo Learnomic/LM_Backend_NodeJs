@@ -454,3 +454,53 @@ export const addVideo = asyncHandler(async (req, res) => {
         });
     }
 });
+
+// @desc    Get video by ID
+// @route   GET /api/curriculum/video/:videoId
+// @access  Private
+export const getVideoById = asyncHandler(async (req, res) => {
+    try {
+        const { videoId } = req.params;
+        
+        // Find the video by ID
+        const video = await Video.findById(videoId);
+        if (!video) {
+            return res.status(404).json({ 
+                success: false,
+                message: 'Video not found' 
+            });
+        }
+
+        // Get the subject information
+        const subject = await Subject.findOne({ subject: video.subName });
+        
+        // Prepare the response
+        const response = {
+            success: true,
+            data: {
+                _id: video._id,
+                title: video.title,
+                videoUrl: video.videoUrl,
+                subName: video.subName,
+                chapterName: video.chapterName,
+                topicName: video.topicName,
+                subtopicName: video.subtopicName,
+                subject: subject ? {
+                    _id: subject._id,
+                    name: subject.subject,
+                    board: subject.board,
+                    grade: subject.grade
+                } : null
+            }
+        };
+
+        res.json(response);
+    } catch (err) {
+        console.error('Error in getVideoById:', err);
+        res.status(500).json({ 
+            success: false,
+            message: 'Error fetching video',
+            error: err.message 
+        });
+    }
+});
