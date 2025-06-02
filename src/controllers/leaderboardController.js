@@ -9,14 +9,22 @@ import mongoose from 'mongoose';
 export const getLeaderboard = async (req, res) => {
     try {
         const { userId } = req.params;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = parseInt(req.query.skip) || 0;
 
-        // Base aggregation pipeline
+        // Base aggregation pipeline with optimized stages
         const pipeline = [
+            {
+                $match: {
+                    completed: true // Only include completed quizzes
+                }
+            },
             {
                 $group: {
                     _id: '$userId',
                     averageScore: { $avg: '$score' },
-                    totalQuizzes: { $sum: 1 }
+                    totalQuizzes: { $sum: 1 },
+                    lastQuizDate: { $max: '$createdAt' }
                 }
             },
             {
@@ -24,7 +32,17 @@ export const getLeaderboard = async (req, res) => {
                     from: 'Users',
                     localField: '_id',
                     foreignField: '_id',
-                    as: 'userDetails'
+                    as: 'userDetails',
+                    pipeline: [
+                        {
+                            $project: {
+                                name: 1,
+                                email: 1,
+                                board: 1,
+                                grade: 1
+                            }
+                        }
+                    ]
                 }
             },
             {
@@ -34,83 +52,72 @@ export const getLeaderboard = async (req, res) => {
                 $project: {
                     _id: 1,
                     name: '$userDetails.name',
+                    email: '$userDetails.email',
+                    board: '$userDetails.board',
+                    grade: '$userDetails.grade',
                     averageScore: { $round: ['$averageScore', 2] },
-                    totalQuizzes: 1
+                    totalQuizzes: 1,
+                    lastQuizDate: 1
                 }
             },
             {
-                $sort: { averageScore: -1 }
+                $sort: { 
+                    averageScore: -1,
+                    totalQuizzes: -1,
+                    lastQuizDate: -1
+                }
+            },
+            {
+                $skip: skip
+            },
+            {
+                $limit: limit
             }
         ];
 
-        // If userId is provided, get specific user's position
+        // If userId is provided, add a match stage at the beginning
         if (userId) {
-            // First verify if user exists
-            if (!mongoose.Types.ObjectId.isValid(userId)) {
-                return res.status(400).json({
-                    success: false,
-                    message: 'Invalid user ID format'
-                });
-            }
-
-            const user = await User.findById(userId);
-            if (!user) {
-                return res.status(404).json({
-                    success: false,
-                    message: 'User not found'
-                });
-            }
-
-            // Get user's quiz scores
-            const userScores = await QuizScore.find({ userId });
-            
-            if (!userScores || userScores.length === 0) {
-                return res.status(200).json({
-                    success: true,
-                    data: {
-                        userPosition: null,
-                        totalUsers: 0,
-                        userScore: {
-                            _id: userId,
-                            name: user.name,
-                            averageScore: 0,
-                            totalQuizzes: 0,
-                            position: null
-                        }
-                    }
-                });
-            }
-
-            // Get all scores and find user's position
-            const allScores = await QuizScore.aggregate(pipeline);
-            const userPosition = allScores.findIndex(score => score._id.toString() === userId) + 1;
-
-            return res.status(200).json({
-                success: true,
-                data: {
-                    userPosition,
-                    totalUsers: allScores.length,
-                    userScore: {
-                        ...allScores.find(score => score._id.toString() === userId),
-                        position: userPosition
-                    }
+            pipeline.unshift({
+                $match: {
+                    userId: new mongoose.Types.ObjectId(userId)
                 }
             });
         }
 
-        // If no userId provided, return full leaderboard
         const leaderboard = await QuizScore.aggregate(pipeline);
+
+        // Get total count for pagination
+        const totalCount = await QuizScore.aggregate([
+            {
+                $match: {
+                    completed: true
+                }
+            },
+            {
+                $group: {
+                    _id: '$userId'
+                }
+            },
+            {
+                $count: 'total'
+            }
+        ]);
 
         res.status(200).json({
             success: true,
-            data: leaderboard
+            data: leaderboard,
+            pagination: {
+                total: totalCount[0]?.total || 0,
+                limit,
+                skip
+            }
         });
     } catch (error) {
-        console.error('Error fetching leaderboard:', error);
+        console.error('Leaderboard fetch error:', error);
         res.status(500).json({
             success: false,
-            message: 'Error fetching leaderboard',
-            error: error.message
+            message: 'Failed to fetch leaderboard',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 }; 

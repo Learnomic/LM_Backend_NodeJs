@@ -5,6 +5,7 @@ dotenv.config();
 import express from 'express';
 import mongoose from 'mongoose';
 import cors from 'cors';
+import compression from 'compression';
 import curriculumRoutes from './src/routes/curriculumRoutes.js';
 import connectDB from "./src/config/db.js";
 import authRoutes from './src/routes/authRoutes.js';
@@ -16,10 +17,27 @@ import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
 connectDB();
 
 const app = express();
-const PORT = process.env.PORT || 5000;
+const PORT = parseInt(process.env.PORT) || 5000;
+
+// Enable compression for all routes
+app.use(compression());
 
 app.use(cors());
 app.use(express.json());
+
+// Add cache control headers middleware
+app.use((req, res, next) => {
+  // Cache static assets for 1 day
+  if (req.url.match(/^\/(css|js|img|font)/i)) {
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+  }
+  // Cache API responses for 5 minutes
+  else if (req.url.startsWith('/api/')) {
+    res.setHeader('Cache-Control', 'private, max-age=300');
+  }
+  next();
+});
+
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api', QuizRoutes);

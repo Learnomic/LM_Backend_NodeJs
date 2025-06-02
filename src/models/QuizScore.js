@@ -19,46 +19,56 @@ const quizScoreSchema = new mongoose.Schema({
     userId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: true,
+        index: true
     },
     quizId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Quiz',
-        required: true
+        required: true,
+        index: true
     },
     videoId: {
         type: String,
-        required: true
+        required: true,
+        index: true
     },
     subjectId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Subject',
-        required: true
+        required: true,
+        index: true
     },
     subjectName: {
         type: String,
-        required: true
+        required: true,
+        index: true
     },
     topicId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Topic',
-        required: true
+        required: true,
+        index: true
     },
     topicName: {
         type: String,
-        required: true
+        required: true,
+        index: true
     },
     chapterName: {
         type: String,
-        default: null
+        default: null,
+        index: true
     },
     subtopicName: {
         type: String,
-        default: null
+        default: null,
+        index: true
     },
     score: {
         type: Number,
-        required: true
+        required: true,
+        index: true
     },
     totalQuestions: {
         type: Number,
@@ -78,11 +88,18 @@ const quizScoreSchema = new mongoose.Schema({
     },
     completed: {
         type: Boolean,
-        default: true
+        default: true,
+        index: true
     }
 }, {
     timestamps: true
 });
+
+quizScoreSchema.index({ userId: 1, completed: 1 });
+quizScoreSchema.index({ subjectId: 1, completed: 1 });
+quizScoreSchema.index({ topicId: 1, completed: 1 });
+quizScoreSchema.index({ score: -1, completed: 1 });
+quizScoreSchema.index({ createdAt: -1, completed: 1 });
 
 const QuizScore = mongoose.model('QuizScore', quizScoreSchema, 'QuizScores');
 
