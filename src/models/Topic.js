@@ -21,6 +21,10 @@ const topicSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Add indexes for frequently queried fields
+topicSchema.index({ subjectId: 1, chapterId: 1 });
+topicSchema.index({ subjectId: 1, chapterId: 1, topicName: 1 }, { unique: true });
+
 const Topic = mongoose.model('Topic', topicSchema);
 
 export default Topic; 

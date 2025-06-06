@@ -29,7 +29,8 @@ const quizScoreSchema = new mongoose.Schema({
         index: true
     },
     videoId: {
-        type: String,
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Video',
         required: true,
         index: true
     },

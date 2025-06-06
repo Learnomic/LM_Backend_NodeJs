@@ -13,15 +13,20 @@ const userSchema = mongoose.Schema(
         },
         password: {
             type: String,
-            required: true,
+            required: function() {
+                return !this.googleId; // Password is required only if not using Google auth
+            },
+        },
+        googleId: {
+            type: String,
+            unique: true,
+            sparse: true,
         },
         board: {
             type: String,
-            required: true,
         },
         grade: {
             type: Number,
-            required: true,
         },
         isAdmin: {
             type: Boolean,
@@ -30,6 +35,10 @@ const userSchema = mongoose.Schema(
         badges: {
             type: [String],
             default: []
+        },
+        isVerified: {
+            type: Boolean,
+            default: false,
         },
     },
     {

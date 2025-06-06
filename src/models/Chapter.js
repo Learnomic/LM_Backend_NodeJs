@@ -16,6 +16,10 @@ const chapterSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Add indexes for frequently queried fields
+chapterSchema.index({ subject: 1, chapterName: 1 }, { unique: true });
+chapterSchema.index({ subject: 1 });
+
 const Chapter = mongoose.model('Chapter', chapterSchema);
 
 export default Chapter; 

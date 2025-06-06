@@ -30,6 +30,10 @@ const videoSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Add indexes for frequently queried fields
+videoSchema.index({ subName: 1, chapterName: 1, topicName: 1, subtopicName: 1 });
+videoSchema.index({ videoUrl: 1 }, { unique: true });
+
 const Video = mongoose.model('Video', videoSchema);
 
 export default Video; 

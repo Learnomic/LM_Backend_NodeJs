@@ -16,16 +16,21 @@ const UserSchema = new mongoose.Schema({
   // password is not stored directly in Users collection, but in UserCredentials
   board: {
     type: String,
-    required: true,
+    required: function() { return !this.googleId; }, // Make optional for Google users
   },
   grade: {
     type: String,
-    required: true,
+    required: function() { return !this.googleId; }, // Make optional for Google users
   },
   credential_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'UserCredential', // Reference to the UserCredential model
-    required: true
+    required: function() { return !this.googleId; } // Make optional for Google users
+  },
+  googleId: {
+    type: String,
+    unique: true,
+    sparse: true // Allows null values for unique index
   },
   school: {
     type: String
@@ -63,6 +68,13 @@ const UserSchema = new mongoose.Schema({
   completedVideos: {
     type: [String],
     default: []
+  },
+  lastLoginAt: { // Add last login timestamp field
+    type: Date,
+  },
+  isVerified: { // Add isVerified field from the other model
+      type: Boolean,
+      default: false,
   }
 }, {
   collection: 'Users', // Explicitly set collection name

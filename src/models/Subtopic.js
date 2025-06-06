@@ -26,6 +26,10 @@ const subtopicSchema = new mongoose.Schema({
     timestamps: true
 });
 
+// Add indexes for frequently queried fields
+subtopicSchema.index({ subName: 1, chapterName: 1, topicName: 1 });
+subtopicSchema.index({ subName: 1, chapterName: 1, topicName: 1, subtopicName: 1 }, { unique: true });
+
 const Subtopic = mongoose.model('Subtopic', subtopicSchema);
 
 export default Subtopic; 

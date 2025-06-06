@@ -7,12 +7,82 @@ import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import mongoose from 'mongoose';
 import Subtopic from '../models/Subtopic.js';
+import Chapter from '../models/Chapter.js';
 
-// Get quiz by video URL
+// Cache for quiz data
+const quizCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes cache TTL
+
+// Cache cleanup interval (every 10 minutes)
+setInterval(() => {
+    const now = Date.now();
+    for (const [key, value] of quizCache.entries()) {
+        if (now - value.timestamp > CACHE_TTL) {
+            quizCache.delete(key);
+        }
+    }
+}, 10 * 60 * 1000);
+
+// Get all quizzes with pagination and lazy loading
+export const getAllQuizzes = asyncHandler(async (req, res) => {
+    try {
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const skip = (page - 1) * limit;
+
+        // Create cache key
+        const cacheKey = `quizzes:${page}:${limit}`;
+
+        // Check cache first
+        const cachedResponse = quizCache.get(cacheKey);
+        if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
+            return res.json(cachedResponse.data);
+        }
+
+        // Get total count for pagination
+        const totalQuizzes = await Quiz.countDocuments();
+
+        // Fetch quizzes with pagination and lean query
+        const quizzes = await Quiz.find()
+            .select('videoId videoUrl questions')
+            .skip(skip)
+            .limit(limit)
+            .lean();
+
+        if (!quizzes || quizzes.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: 'No quizzes found'
+            });
+        }
+
+        const response = {
+            success: true,
+            count: quizzes.length,
+            totalQuizzes,
+            totalPages: Math.ceil(totalQuizzes / limit),
+            currentPage: page,
+            data: quizzes
+        };
+
+        // Store in cache
+        quizCache.set(cacheKey, { data: response, timestamp: Date.now() });
+
+        res.json(response);
+    } catch (error) {
+        console.error('Error fetching quizzes:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching quizzes',
+            error: error.message
+        });
+    }
+});
+
+// Get quiz by video URL with caching
 export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
     const { videoUrl } = req.query;
-    console.log('Received videoUrl:', videoUrl);
-
+    
     if (!videoUrl) {
         return res.status(400).json({
             success: false,
@@ -21,9 +91,17 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
     }
 
     try {
-        // Find the quiz
-        const quiz = await Quiz.findOne({ videoUrl: videoUrl.trim() });
-        console.log('Quiz found:', quiz);
+        // Check cache first
+        const cacheKey = `quiz:${videoUrl}`;
+        const cachedResponse = quizCache.get(cacheKey);
+        if (cachedResponse && (Date.now() - cachedResponse.timestamp < CACHE_TTL)) {
+            return res.json(cachedResponse.data);
+        }
+
+        // Find the quiz with lean query and only select necessary fields
+        const quiz = await Quiz.findOne({ videoUrl: videoUrl.trim() })
+            .select('_id videoUrl videoId questions')
+            .lean();
 
         if (!quiz) {
             return res.status(404).json({
@@ -33,8 +111,21 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
         }
 
         // Find the video using the videoId from the quiz
-        const video = await Video.findById(quiz.videoId);
-        console.log('Video found by ID:', video);
+        const video = await Video.findOne({ 
+            $or: [
+                { _id: quiz.videoId },
+                { videoUrl: videoUrl.trim() }
+            ]
+        })
+        .select('subName chapterName topicName subtopicName')
+        .lean();
+
+        if (!video) {
+            return res.status(404).json({
+                success: false,
+                message: 'Video not found'
+            });
+        }
 
         // Shuffle questions array using Fisher-Yates algorithm
         const shuffleArray = (array) => {
@@ -48,46 +139,43 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
         // Create a copy of questions array and shuffle it
         const shuffledQuestions = shuffleArray([...quiz.questions]);
         
-        // Take only first 10 questions
-        const selectedQuestions = shuffledQuestions.slice(0, 10);
+        // Take only first 10 questions and ensure they have the correct structure
+        const selectedQuestions = shuffledQuestions.slice(0, 10).map(q => ({
+            opt: {
+                a: q.opt?.a || '',
+                b: q.opt?.b || '',
+                c: q.opt?.c || '',
+                d: q.opt?.d || ''
+            },
+            _id: q._id,
+            que: q.que,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation || ''
+        }));
 
-        // Prepare the response with or without subject information
+        // Prepare the response
         const response = {
-            _id: quiz._id,
-            videoUrl: quiz.videoUrl,
-            videoId: quiz.videoId,
-            questions: selectedQuestions,
-            totalQuestions: quiz.questions.length,
-            selectedQuestionsCount: selectedQuestions.length
+            success: true,
+            data: {
+                _id: quiz._id,
+                videoUrl: quiz.videoUrl,
+                videoId: quiz.videoId,
+                questions: selectedQuestions,
+                totalQuestions: quiz.questions.length,
+                selectedQuestionsCount: 10,
+                subject: {
+                    name: video.subName,
+                    chapterName: video.chapterName,
+                    topicName: video.topicName,
+                    subtopicName: video.subtopicName
+                }
+            }
         };
 
-        // If video is found, get subject information
-        if (video) {
-            response.subject = {
-                name: video.subName,
-                chapterName: video.chapterName,
-                topicName: video.topicName,
-                subtopicName: video.subtopicName
-            };
-        } else {
-            // If video not found by ID, try to find it by URL
-            const videoByUrl = await Video.findOne({ videoUrl: videoUrl.trim() });
-            console.log('Video found by URL:', videoByUrl);
+        // Store in cache
+        quizCache.set(cacheKey, { data: response, timestamp: Date.now() });
 
-            if (videoByUrl) {
-                response.subject = {
-                    name: videoByUrl.subName,
-                    chapterName: videoByUrl.chapterName,
-                    topicName: videoByUrl.topicName,
-                    subtopicName: videoByUrl.subtopicName
-                };
-            }
-        }
-
-        res.status(200).json({
-            success: true,
-            data: response
-        });
+        res.json(response);
     } catch (error) {
         console.error('Error fetching quiz:', error);
         res.status(500).json({
@@ -100,42 +188,69 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
 
 // Submit quiz
 export const submitQuiz = asyncHandler(async (req, res) => {
-    const {
-        quizId,
-        videoId,
-        subjectId,
-        subjectName,
-        topicId,
-        topicName,
-        chapterName,
-        subtopicName,
-        totalQuestions,
-        correctAnswers,
-        score,
-        timeSpent,
-        answers
-    } = req.body;
-
-    // Get userId from authenticated user
-    const userId = req.user._id;
-
-    console.log('Received quiz submission:', {
-        userId,
-        quizId,
-        videoId,
-        subjectId,
-        subjectName,
-        topicId,
-        topicName,
-        totalQuestions,
-        correctAnswers,
-        score,
-        timeSpent
-    });
-
     try {
+        const {
+            quizId,
+            videoId,
+            subjectId,
+            subjectName,
+            topicId,
+            topicName,
+            chapterName,
+            subtopicName,
+            totalQuestions,
+            correctAnswers,
+            score,
+            timeSpent,
+            answers
+        } = req.body;
+
+        // Get userId from authenticated user
+        const userId = req.user._id;
+
+        console.log('Received quiz submission:', {
+            userId,
+            quizId,
+            videoId,
+            subjectId,
+            subjectName,
+            topicId,
+            topicName,
+            totalQuestions,
+            correctAnswers,
+            score,
+            timeSpent
+        });
+
+        // Validate required fields
+        if (!quizId || !videoId || !subjectId || !subjectName || !topicId || !topicName || !totalQuestions || !correctAnswers || !score || !timeSpent || !answers) {
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields',
+                required: {
+                    quizId: 'Quiz ID',
+                    videoId: 'Video ID',
+                    subjectId: 'Subject ID',
+                    subjectName: 'Subject Name',
+                    topicId: 'Topic ID',
+                    topicName: 'Topic Name',
+                    totalQuestions: 'Total Questions',
+                    correctAnswers: 'Correct Answers',
+                    score: 'Score',
+                    timeSpent: 'Time Spent',
+                    answers: 'Answers Array'
+                }
+            });
+        }
+
+        // Convert string IDs to ObjectId
+        const videoObjectId = new mongoose.Types.ObjectId(videoId);
+        const quizObjectId = new mongoose.Types.ObjectId(quizId);
+        const subjectObjectId = new mongoose.Types.ObjectId(subjectId);
+        const topicObjectId = new mongoose.Types.ObjectId(topicId);
+
         // Find the video to verify it exists
-        const video = await Video.findById(videoId);
+        const video = await Video.findById(videoObjectId);
         console.log('Found video:', video);
         
         if (!video) {
@@ -157,11 +272,11 @@ export const submitQuiz = asyncHandler(async (req, res) => {
         // Create new quiz score
         const quizScore = new QuizScore({
             userId,
-            quizId,
-            videoId,
-            subjectId,
+            quizId: quizObjectId,
+            videoId: videoObjectId,
+            subjectId: subjectObjectId,
             subjectName,
-            topicId,
+            topicId: topicObjectId,
             topicName,
             chapterName,
             subtopicName,
@@ -189,31 +304,6 @@ export const submitQuiz = asyncHandler(async (req, res) => {
             });
         }
 
-        // Calculate new streak
-        const today = new Date();
-        const lastActivity = user.updatedAt;
-        const daysSinceLastActivity = Math.floor((today - lastActivity) / (1000 * 60 * 60 * 24));
-        
-        let newCurrentStreak = user.currentStreak;
-        let newLongestStreak = user.longestStreak;
-
-        if (daysSinceLastActivity <= 1) {
-            // Activity within 24 hours, increment streak
-            newCurrentStreak += 1;
-            if (newCurrentStreak > user.longestStreak) {
-                newLongestStreak = newCurrentStreak;
-            }
-        } else {
-            // Activity after 24 hours, reset streak
-            newCurrentStreak = 1;
-        }
-
-        console.log('Calculated streaks:', {
-            daysSinceLastActivity,
-            newCurrentStreak,
-            newLongestStreak
-        });
-
         // Update user stats
         const updatedUser = await User.findByIdAndUpdate(
             userId,
@@ -223,13 +313,9 @@ export const submitQuiz = asyncHandler(async (req, res) => {
                     totalPoints: pointsEarned,
                     experience: experienceEarned
                 },
-                $set: {
-                    currentStreak: newCurrentStreak,
-                    longestStreak: newLongestStreak
-                },
-                $addToSet: { completedVideos: videoId }
+                $addToSet: { completedVideos: videoObjectId }
             },
-            { new: true } // Return the updated document
+            { new: true }
         );
         console.log('Updated user:', updatedUser);
 
@@ -240,9 +326,7 @@ export const submitQuiz = asyncHandler(async (req, res) => {
                 quizScore: savedQuizScore,
                 stats: {
                     pointsEarned,
-                    experienceEarned,
-                    newCurrentStreak,
-                    newLongestStreak
+                    experienceEarned
                 }
             }
         });

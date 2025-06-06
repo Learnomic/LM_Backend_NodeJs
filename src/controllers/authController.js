@@ -106,6 +106,47 @@ export const login = async (req, res) => {
 
     console.log('Login successful for user:', user.email);
 
+    // Calculate and update login streak
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Normalize to start of day
+
+    const lastLoginDate = user.lastLoginAt ? new Date(user.lastLoginAt) : null;
+    if (lastLoginDate) {
+      lastLoginDate.setHours(0, 0, 0, 0); // Normalize to start of day
+    }
+
+    let newCurrentStreak = user.currentStreak || 0;
+    let newLongestStreak = user.longestStreak || 0;
+
+    if (!lastLoginDate) {
+      // First login ever
+      newCurrentStreak = 1;
+    } else {
+      const dayDiff = Math.floor((today - lastLoginDate) / (1000 * 60 * 60 * 24));
+      
+      if (dayDiff === 1) {
+        // Consecutive day login
+        newCurrentStreak += 1;
+      } else if (dayDiff > 1) {
+        // Streak broken - more than one day gap
+        newCurrentStreak = 1;
+      }
+      // If dayDiff is 0, it's a login on the same day, streak doesn't change
+    }
+
+    // Update longest streak if current streak is higher
+    if (newCurrentStreak > newLongestStreak) {
+      newLongestStreak = newCurrentStreak;
+    }
+
+    // Update user document with new streak and last login time
+    user.currentStreak = newCurrentStreak;
+    user.longestStreak = newLongestStreak;
+    user.lastLoginAt = new Date(); // Set last login to current time
+    await user.save();
+
+    console.log('Updated user streak:', { currentStreak: user.currentStreak, longestStreak: user.longestStreak });
+
     // Send response with User details
     res.status(200).json({
       token,
