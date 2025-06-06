@@ -211,7 +211,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 description: achievement.description,
                 progress: Math.round(progress),
-                current: current,
+                current: progress >= 100 ? achievement.threshold : current,
                 threshold: achievement.threshold,
                 completed: progress >= 100,
             };
