@@ -6,11 +6,15 @@ dotenv.config();
 
 const connectDB = async () => {
   try {
-    const conn = await mongoose.connect(process.env.MONGO_URI);
+    const conn = await mongoose.connect(process.env.MONGO_URI, {
+      dbName: 'learnomic' // Explicitly specify the database name
+    });
+
     console.log(`MongoDB Connected: ${conn.connection.host}`);
-    console.log(`Connected Database Name: ${conn.connection.name}`);
+    console.log(`Connected Database Name: ${conn.connection.db.databaseName}`);
+
   } catch (error) {
-    console.error("Database connection failed", error);
+    console.error("Database connection failed:", error);
     process.exit(1);
   }
 };

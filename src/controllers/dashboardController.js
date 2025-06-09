@@ -14,10 +14,9 @@ const ACHIEVEMENT_THRESHOLDS = {
     FIRST_STEPS: { description: 'Complete your first quiz', threshold: 1, unit: 'quiz' },
     QUIZ_APPRENTICE: { description: 'Complete 10 quizzes', threshold: 10, unit: 'quizzes' },
     QUIZ_MASTER: { description: 'Complete 50 quizzes', threshold: 50, unit: 'quizzes' },
-    PERFECT_SCORE: { description: 'Achieve 100% on a quiz', threshold: 1, unit: 'perfect score' }, // Threshold 1 means at least one perfect score
-    HIGH_PERFORMER: { description: 'Achieve an average score of 80% or higher', threshold: 80, unit: 'average score' }, // Threshold 80 means 80% average
-    WEEKLY_WARRIOR: { description: 'Maintain a 7-day learning streak', threshold: 7, unit: 'days' }, // Threshold 7 means 7-day streak
-    // Add other achievements here
+    PERFECT_SCORE: { description: 'Achieve 100% on a quiz', threshold: 1, unit: 'perfect score' },
+    HIGH_PERFORMER: { description: 'Achieve an average score of 80% or higher', threshold: 80, unit: 'average score' },
+    WEEKLY_WARRIOR: { description: 'Maintain a 7-day learning streak', threshold: 7, unit: 'days' },
 };
 
 // Get complete dashboard data
@@ -28,13 +27,14 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         console.log('Fetching dashboard data for user:', userId);
 
         // Fetch all required data in parallel for better performance
+        // REMOVED .sort() from QuizScore.find() to avoid indexing issues
         const [
             quizScoresCurrentUser,
             subjectProgress,
             user
         ] = await Promise.all([
-            // Fetch quiz scores for the current user
-            QuizScore.find({ userId: userId }).sort({ createdAt: -1 }),
+            // Fetch quiz scores for the current user WITHOUT sorting
+            QuizScore.find({ userId: userId }).lean(), // Added .lean() for better performance
             // Execute aggregation for subject progress
             QuizScore.aggregate([
                 { $match: { userId: new mongoose.Types.ObjectId(userId) } },
@@ -58,12 +58,17 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         console.log('Subject progress count:', subjectProgress.length);
         console.log('User found:', !!user);
 
+        // Sort quiz scores in JavaScript instead of MongoDB
+        const sortedQuizScores = quizScoresCurrentUser.sort((a, b) => 
+            new Date(b.createdAt) - new Date(a.createdAt)
+        );
+
         // Calculate streak
         const calculateStreak = (quizScores) => {
             if (!quizScores || quizScores.length === 0) return { currentStreak: 0, longestStreak: 0 };
 
-            // Sort quiz scores by date in descending order
-            const sortedScores = [...quizScores].sort((a, b) => b.createdAt - a.createdAt);
+            // Use the already sorted scores
+            const sortedScores = [...quizScores];
             
             let currentStreak = 0;
             let longestStreak = 0;
@@ -119,7 +124,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             return { currentStreak, longestStreak };
         };
 
-        const { currentStreak, longestStreak } = calculateStreak(quizScoresCurrentUser);
+        const { currentStreak, longestStreak } = calculateStreak(sortedQuizScores);
         console.log('Calculated streaks:', { currentStreak, longestStreak });
 
         // Calculate total time spent from quiz scores
@@ -139,6 +144,14 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
 
         // Calculate level based on experience (1000 XP per level)
         const level = Math.floor(totalExperience / 1000) + 1;
+
+        // Calculate star rating
+        const starRating = {
+            current: Math.floor(totalExperience / 1000) + 1,
+            nextThreshold: (Math.floor(totalExperience / 1000) + 1) * 1000,
+            xpToNextStar: ((Math.floor(totalExperience / 1000) + 1) * 1000) - totalExperience,
+            totalExperience: totalExperience
+        };
 
         // Calculate quiz statistics using quizScoresCurrentUser
         const totalQuizzes = quizScoresCurrentUser.length;
@@ -177,8 +190,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 acc[subject] = (acc[subject] || 0) + 1;
                 return acc;
             }, {}),
-            performanceOverTime: quizScoresCurrentUser
-                .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)) // Sort by date descending
+            performanceOverTime: sortedQuizScores
                 .slice(0, 10) // Take the 10 most recent quizzes
                 .map(q => {
                     // Calculate score as percentage of correct answers
@@ -201,8 +213,8 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             }))
         };
 
-        // Get recent quiz history
-        const recentQuizHistory = quizScoresCurrentUser.slice(0, 5).map(quiz => ({
+        // Get recent quiz history - use the first 5 from sorted array
+        const recentQuizHistory = sortedQuizScores.slice(0, 5).map(quiz => ({
             id: quiz._id,
             subject: quiz.subjectName,
             score: (quiz.correctAnswers / quiz.totalQuestions) * 100,
@@ -256,7 +268,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         });
 
         // Format fun facts
-        const formattedFunFacts = [ // Static fun facts
+        const formattedFunFacts = [
             { id: 1, text: "Did you know? The average human attention span is shorter than a goldfish's! Keep practicing!", category: "General", icon: "💡" },
             { id: 2, text: "Solving quizzes boosts your brainpower by making new connections!", category: "Learning", icon: "🧠" },
             { id: 3, text: "Regular practice, even short sessions, is more effective than cramming.", category: "Study Tips", icon: "📚" },
@@ -264,7 +276,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             { id: 5, text: "Challenge yourself with topics you find difficult – that's where the biggest growth happens!", category: "Motivation", icon: "💪" }
         ];
 
-        // Format subject progress (assuming subjectProgress is already in desired format from aggregation)
+        // Format subject progress
         const formattedSubjectProgress = subjectProgress.map(sp => ({
             subjectId: sp._id,
             subjectName: sp.subjectName,
@@ -291,7 +303,8 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 longestStreak: longestStreak,
                 totalPointsEarned: totalPointsEarned,
                 level: level,
-                experience: totalExperience
+                experience: totalExperience,
+                starRating: starRating
             }
         };
 
@@ -307,231 +320,15 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
     } catch (error) {
         console.error('Dashboard data fetch error:', error);
         console.error('Error stack:', error.stack);
-        res.status(500).json({ success: false, message: 'Failed to fetch dashboard data', error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' });
-    }
-});
-
-// Get user's learning streak
-export const getUserStreak = asyncHandler(async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        const streak = await calculateStreak(user);
-        res.status(200).json({
-            success: true,
-            data: { streak }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user streak',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        res.status(500).json({ 
+            success: false, 
+            message: 'Failed to fetch dashboard data', 
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error' 
         });
     }
 });
 
-// Get user's achievements
-export const getUserAchievements = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id;
-
-        // Fetch all quiz scores for the user to calculate achievement progress
-        const quizScores = await QuizScore.find({ userId: userId });
-
-        // Fetch user details for streak calculation (if needed for achievements)
-        const user = await User.findById(userId); // Fetch user to potentially get streak data if stored
-
-        // Calculate progress for each achievement
-        const achievementsWithProgress = Object.keys(ACHIEVEMENT_THRESHOLDS).map(key => {
-            const achievement = ACHIEVEMENT_THRESHOLDS[key];
-            let progress = 0;
-            let current = 0;
-
-            switch (key) {
-                case 'FIRST_STEPS':
-                case 'QUIZ_APPRENTICE':
-                case 'QUIZ_MASTER':
-                    current = quizScores.length;
-                    progress = Math.min(current / achievement.threshold, 1) * 100;
-                    break;
-                case 'PERFECT_SCORE':
-                    current = quizScores.filter(qs => qs.score === 100).length;
-                     // For a binary achievement (achieved or not), progress is 100% if current >= threshold
-                    progress = current >= achievement.threshold ? 100 : 0;
-                    break;
-                case 'HIGH_PERFORMER':
-                    const totalScores = quizScores.reduce((sum, qs) => sum + qs.score, 0);
-                    const averageScore = quizScores.length > 0 ? totalScores / quizScores.length : 0;
-                    current = averageScore; // Current is the average score
-                     // Progress based on average score towards the threshold
-                    progress = Math.min(averageScore / achievement.threshold, 1) * 100;
-                    break;
-                 case 'WEEKLY_WARRIOR':
-                    // This requires proper streak calculation logic, placeholder for now
-                    const currentStreak = 0; // Replace with actual streak calculation
-                    current = currentStreak;
-                    progress = Math.min(currentStreak / achievement.threshold, 1) * 100;
-                     break;
-                // Add cases for other achievements
-            }
-
-            return {
-                name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()), // Format key as a readable name
-                description: achievement.description,
-                progress: Math.round(progress), // Round progress to nearest integer
-                current: current, // Include current value for display like 10/10
-                threshold: achievement.threshold,
-                unit: achievement.unit,
-                completed: current >= achievement.threshold, // Determine if achievement is completed
-            };
-        });
-
-        res.status(200).json({
-            success: true,
-            count: achievementsWithProgress.length,
-            data: achievementsWithProgress
-        });
-    } catch (error) {
-        console.error('Error fetching user achievements:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user achievements',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
-
-// Get fun facts about user's learning journey
-export const getFunFacts = asyncHandler(async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
-
-        const funFacts = await generateFunFacts(user);
-        res.status(200).json({
-            success: true,
-            data: { funFacts }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch fun facts',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
-
-// @desc    Get user overall progress
-// @route   GET /api/user/progress
-// @access  Private
-export const getUserProgress = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id;
-
-        // Fetch relevant data for progress calculation
-        const quizScores = await QuizScore.find({ userId: userId });
-        const user = await User.findById(userId).select('completedVideos'); // Assuming completedVideos is on User model
-
-        // Calculate quiz statistics
-        const totalQuizzes = quizScores.length;
-        const scores = quizScores.map(qs => qs.score || 0);
-        const averageScore = totalQuizzes > 0
-            ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
-            : 0;
-        const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
-
-        // Get completed videos (adjust based on how you track this - currently a placeholder)
-        const completedVideos = user?.completedVideos?.length || 0; // Example: if User model has completedVideos array
-
-        // Calculate streak (This is a simplified example, needs proper streak tracking logic)
-        // A more robust streak requires tracking daily activity timestamps.
-        const currentStreak = 0; // Placeholder - implement actual streak calculation
-
-        res.status(200).json({
-            success: true,
-            data: {
-                totalQuizzes,
-                averageScore,
-                highestScore,
-                completedVideos,
-                currentStreak,
-                // Add other overall progress data here
-            }
-        });
-
-    } catch (error) {
-        console.error('Error fetching user progress:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch user progress',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
-
-// @desc    Get user subject-wise progress
-// @route   GET /api/subject_progress
-// @access  Private
-export const getSubjectProgress = asyncHandler(async (req, res) => {
-    try {
-        const userId = req.user._id;
-
-        // Fetch quiz scores for the user, grouped by subject
-        const subjectProgressData = await QuizScore.aggregate([
-            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-            { $group: {
-                _id: "$subjectId",
-                totalQuizzes: { $sum: 1 },
-                averageScore: { $avg: "$score" },
-                totalTimeTaken: { $sum: { $toInt: "$timeTaken" } }
-            }},
-            { $lookup: {
-                from: 'subjects',
-                localField: '_id',
-                foreignField: '_id',
-                as: 'subjectDetails'
-            }},
-            { $unwind: '$subjectDetails' },
-            { $project: {
-                _id: 0,
-                subjectId: '$_id',
-                subjectName: '$subjectDetails.subject',
-                totalQuizzes: 1,
-                averageScore: { $round: ['$averageScore', 2] },
-                totalTimeTaken: 1
-            }}
-        ]);
-
-        res.status(200).json({
-            success: true,
-            count: subjectProgressData.length,
-            data: subjectProgressData
-        });
-
-    } catch (error) {
-        console.error('Error fetching subject progress:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch subject progress',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
-
-// @desc    Suggest the next topic or video for the user to continue learning
-// @route   GET /api/dashboard/continue-learning
-// @access  Private
+// Continue Learning - Fixed version without sorting in MongoDB
 export const getContinueLearning = asyncHandler(async (req, res) => {
     const userId = req.user._id;
     console.log('Finding continue learning content for user:', userId);
@@ -645,6 +442,219 @@ export const getContinueLearning = asyncHandler(async (req, res) => {
     }
 });
 
+// Rest of your functions remain the same...
+export const getUserStreak = asyncHandler(async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const streak = await calculateStreak(user);
+        res.status(200).json({
+            success: true,
+            data: { streak }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch user streak',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+export const getUserAchievements = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Fetch all quiz scores for the user WITHOUT sorting
+        const quizScores = await QuizScore.find({ userId: userId }).lean();
+
+        // Fetch user details
+        const user = await User.findById(userId);
+
+        // Calculate progress for each achievement
+        const achievementsWithProgress = Object.keys(ACHIEVEMENT_THRESHOLDS).map(key => {
+            const achievement = ACHIEVEMENT_THRESHOLDS[key];
+            let progress = 0;
+            let current = 0;
+
+            switch (key) {
+                case 'FIRST_STEPS':
+                case 'QUIZ_APPRENTICE':
+                case 'QUIZ_MASTER':
+                    current = quizScores.length;
+                    progress = Math.min(current / achievement.threshold, 1) * 100;
+                    break;
+                case 'PERFECT_SCORE':
+                    current = quizScores.filter(qs => {
+                        const score = (qs.correctAnswers / qs.totalQuestions) * 100;
+                        return score === 100;
+                    }).length;
+                    progress = current >= achievement.threshold ? 100 : 0;
+                    break;
+                case 'HIGH_PERFORMER':
+                    const scores = quizScores.map(qs => (qs.correctAnswers / qs.totalQuestions) * 100);
+                    const averageScore = scores.length > 0 
+                        ? scores.reduce((sum, score) => sum + score, 0) / scores.length 
+                        : 0;
+                    current = averageScore;
+                    progress = Math.min(averageScore / achievement.threshold, 1) * 100;
+                    break;
+                case 'WEEKLY_WARRIOR':
+                    const currentStreak = 0; // Replace with actual streak calculation
+                    current = currentStreak;
+                    progress = Math.min(currentStreak / achievement.threshold, 1) * 100;
+                    break;
+            }
+
+            return {
+                name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+                description: achievement.description,
+                progress: Math.round(progress),
+                current: current,
+                threshold: achievement.threshold,
+                unit: achievement.unit,
+                completed: current >= achievement.threshold,
+            };
+        });
+
+        res.status(200).json({
+            success: true,
+            count: achievementsWithProgress.length,
+            data: achievementsWithProgress
+        });
+    } catch (error) {
+        console.error('Error fetching user achievements:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch user achievements',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+export const getFunFacts = asyncHandler(async (req, res) => {
+    try {
+        const user = await User.findById(req.user._id);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        const funFacts = await generateFunFacts(user);
+        res.status(200).json({
+            success: true,
+            data: { funFacts }
+        });
+    } catch (error) {
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch fun facts',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+export const getUserProgress = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Fetch relevant data WITHOUT sorting
+        const quizScores = await QuizScore.find({ userId: userId }).lean();
+        const user = await User.findById(userId).select('completedVideos');
+
+        // Calculate quiz statistics
+        const totalQuizzes = quizScores.length;
+        const scores = quizScores.map(qs => {
+            const correctAnswers = qs.correctAnswers || 0;
+            const totalQuestions = qs.totalQuestions || 1;
+            return (correctAnswers / totalQuestions) * 100;
+        });
+        const averageScore = totalQuizzes > 0
+            ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
+            : 0;
+        const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
+
+        // Get completed videos
+        const completedVideos = user?.completedVideos?.length || 0;
+
+        // Calculate streak (placeholder)
+        const currentStreak = 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                totalQuizzes,
+                averageScore,
+                highestScore,
+                completedVideos,
+                currentStreak,
+            }
+        });
+
+    } catch (error) {
+        console.error('Error fetching user progress:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch user progress',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+export const getSubjectProgress = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+
+        // Fetch quiz scores for the user, grouped by subject
+        const subjectProgressData = await QuizScore.aggregate([
+            { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+            { $group: {
+                _id: "$subjectId",
+                totalQuizzes: { $sum: 1 },
+                averageScore: { $avg: "$score" },
+                totalTimeTaken: { $sum: { $toInt: "$timeTaken" } }
+            }},
+            { $lookup: {
+                from: 'subjects',
+                localField: '_id',
+                foreignField: '_id',
+                as: 'subjectDetails'
+            }},
+            { $unwind: '$subjectDetails' },
+            { $project: {
+                _id: 0,
+                subjectId: '$_id',
+                subjectName: '$subjectDetails.subject',
+                totalQuizzes: 1,
+                averageScore: { $round: ['$averageScore', 2] },
+                totalTimeTaken: 1
+            }}
+        ]);
+
+        res.status(200).json({
+            success: true,
+            count: subjectProgressData.length,
+            data: subjectProgressData
+        });
+
+    } catch (error) {
+        console.error('Error fetching subject progress:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Failed to fetch subject progress',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
 // Helper functions
 const calculateStreak = async (user) => {
     const lastActivity = user.lastActive || new Date();
@@ -655,17 +665,16 @@ const calculateStreak = async (user) => {
 };
 
 const calculatePercentile = (user) => {
-    // This is a placeholder - implement based on your actual user ranking logic
     return Math.floor(Math.random() * 30) + 70; // Returns 70-99
 };
 
 const generateFunFacts = async (user) => {
     try {
-        const quizHistory = await QuizScore.find({ user: user._id });
+        const quizHistory = await QuizScore.find({ user: user._id }).lean();
         const totalMinutes = Math.round((user.totalTimeSpent || 0) / 60);
         const totalQuizzes = quizHistory.length;
         const averageScore = totalQuizzes > 0 
-            ? Math.round(quizHistory.reduce((sum, q) => sum + q.score, 0) / totalQuizzes)
+            ? Math.round(quizHistory.reduce((sum, q) => sum + (q.score || 0), 0) / totalQuizzes)
             : 0;
 
         return [
