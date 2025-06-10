@@ -115,10 +115,21 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             const yesterday = new Date(today);
             yesterday.setDate(yesterday.getDate() - 1);
 
+            // Only count current streak if there was activity today or yesterday
             if (lastDate && (lastDate.getTime() === today.getTime() || lastDate.getTime() === yesterday.getTime())) {
                 currentStreak = tempStreak;
             } else {
                 currentStreak = 0;
+            }
+
+            // Update user's streak in database if it's different
+            if (user.currentStreak !== currentStreak || user.longestStreak !== longestStreak) {
+                User.findByIdAndUpdate(userId, {
+                    currentStreak,
+                    longestStreak
+                }).catch(error => {
+                    console.error('Error updating user streak:', error);
+                });
             }
 
             return { currentStreak, longestStreak };
@@ -128,19 +139,19 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         console.log('Calculated streaks:', { currentStreak, longestStreak });
 
         // Calculate total time spent from quiz scores
-        const totalTimeSpent = quizScoresCurrentUser.reduce((sum, quiz) => sum + (quiz.timeSpent || 0), 0);
+        const totalTimeSpent = Math.round(quizScoresCurrentUser.reduce((sum, quiz) => sum + (quiz.timeSpent || 0), 0) * 100) / 100;
         
         // Calculate total points earned from quiz scores (10 points per correct answer)
-        const totalPointsEarned = quizScoresCurrentUser.reduce((sum, quiz) => {
+        const totalPointsEarned = Math.round(quizScoresCurrentUser.reduce((sum, quiz) => {
             const correctAnswers = quiz.correctAnswers || 0;
             return sum + (correctAnswers * 10);
-        }, 0);
+        }, 0) * 100) / 100;
         
         // Calculate total experience from quiz scores (5 XP per correct answer)
-        const totalExperience = quizScoresCurrentUser.reduce((sum, quiz) => {
+        const totalExperience = Math.round(quizScoresCurrentUser.reduce((sum, quiz) => {
             const correctAnswers = quiz.correctAnswers || 0;
             return sum + (correctAnswers * 5);
-        }, 0);
+        }, 0) * 100) / 100;
 
         // Calculate level based on experience (1000 XP per level)
         const level = Math.floor(totalExperience / 1000) + 1;
@@ -149,8 +160,8 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         const starRating = {
             current: Math.floor(totalExperience / 1000) + 1,
             nextThreshold: (Math.floor(totalExperience / 1000) + 1) * 1000,
-            xpToNextStar: ((Math.floor(totalExperience / 1000) + 1) * 1000) - totalExperience,
-            totalExperience: totalExperience
+            xpToNextStar: Math.round(((Math.floor(totalExperience / 1000) + 1) * 1000) - totalExperience),
+            totalExperience: Math.round(totalExperience * 100) / 100
         };
 
         // Calculate quiz statistics using quizScoresCurrentUser
@@ -159,9 +170,9 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             // Calculate score as percentage of correct answers
             const correctAnswers = q.correctAnswers || 0;
             const totalQuestions = q.totalQuestions || 1;
-            return (correctAnswers / totalQuestions) * 100;
+            return Math.round((correctAnswers / totalQuestions) * 100 * 100) / 100;
         });
-        const highestScore = totalQuizzes > 0 ? Math.max(...scores) : 0;
+        const highestScore = totalQuizzes > 0 ? Math.round(Math.max(...scores) * 100) / 100 : 0;
         const averageScore = totalQuizzes > 0 
             ? Math.round(scores.reduce((sum, score) => sum + score, 0) / totalQuizzes * 100) / 100
             : 0;
@@ -173,15 +184,15 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         const chartData = {
             scoreDistribution: {
                 low: quizScoresCurrentUser.filter(q => {
-                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    const score = Math.round((q.correctAnswers / q.totalQuestions) * 100 * 100) / 100;
                     return score < 50;
                 }).length,
                 mid: quizScoresCurrentUser.filter(q => {
-                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    const score = Math.round((q.correctAnswers / q.totalQuestions) * 100 * 100) / 100;
                     return score >= 50 && score < 80;
                 }).length,
                 high: quizScoresCurrentUser.filter(q => {
-                    const score = (q.correctAnswers / q.totalQuestions) * 100;
+                    const score = Math.round((q.correctAnswers / q.totalQuestions) * 100 * 100) / 100;
                     return score >= 80;
                 }).length,
             },
@@ -196,7 +207,7 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                     // Calculate score as percentage of correct answers
                     const correctAnswers = q.correctAnswers || 0;
                     const totalQuestions = q.totalQuestions || 1;
-                    const score = Math.round((correctAnswers / totalQuestions) * 100);
+                    const score = Math.round((correctAnswers / totalQuestions) * 100 * 100) / 100;
                     
                     return {
                         date: q.createdAt,
@@ -217,10 +228,10 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
         const recentQuizHistory = sortedQuizScores.slice(0, 5).map(quiz => ({
             id: quiz._id,
             subject: quiz.subjectName,
-            score: (quiz.correctAnswers / quiz.totalQuestions) * 100,
+            score: Math.round((quiz.correctAnswers / quiz.totalQuestions) * 100 * 100) / 100,
             totalQuestions: quiz.totalQuestions,
             correctAnswers: quiz.correctAnswers,
-            timeTaken: quiz.timeSpent,
+            timeTaken: Math.round(quiz.timeSpent * 100) / 100,
             date: quiz.createdAt,
             topic: quiz.topicName,
             subtopic: quiz.subtopicName
@@ -237,30 +248,30 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
                 case 'QUIZ_APPRENTICE':
                 case 'QUIZ_MASTER':
                     current = quizScoresCurrentUser.length;
-                    progress = Math.min(current / achievement.threshold, 1) * 100;
+                    progress = Math.round(Math.min(current / achievement.threshold, 1) * 100 * 100) / 100;
                     break;
                 case 'PERFECT_SCORE':
                     current = quizScoresCurrentUser.filter(qs => {
-                        const score = (qs.correctAnswers / qs.totalQuestions) * 100;
+                        const score = Math.round((qs.correctAnswers / qs.totalQuestions) * 100 * 100) / 100;
                         return score === 100;
                     }).length;
                     progress = current >= achievement.threshold ? 100 : 0;
                     break;
                 case 'HIGH_PERFORMER':
                     current = averageScore;
-                    progress = Math.min(averageScore / achievement.threshold, 1) * 100;
+                    progress = Math.round(Math.min(averageScore / achievement.threshold, 1) * 100 * 100) / 100;
                     break;
                 case 'WEEKLY_WARRIOR':
                     current = currentStreak;
-                    progress = Math.min(current / achievement.threshold, 1) * 100;
+                    progress = Math.round(Math.min(current / achievement.threshold, 1) * 100 * 100) / 100;
                     break;
             }
 
             return {
                 name: key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
                 description: achievement.description,
-                progress: Math.round(progress),
-                current: current,
+                progress: Math.round(progress * 100) / 100,
+                current: Math.round(current * 100) / 100,
                 threshold: achievement.threshold,
                 unit: achievement.unit,
                 completed: current >= achievement.threshold,
@@ -281,15 +292,15 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             subjectId: sp._id,
             subjectName: sp.subjectName,
             totalQuizzes: sp.totalQuizzes,
-            averageScore: sp.averageScore,
-            totalTimeSpent: sp.totalTimeSpent,
+            averageScore: Math.round(sp.averageScore * 100) / 100,
+            totalTimeSpent: Math.round(sp.totalTimeSpent * 100) / 100,
             completedTopics: sp.completedTopics
         }));
 
         // Combine all data into a single response
         const dashboardData = {
-            averageScore,
-            highestScore,
+            averageScore: Math.round(averageScore * 100) / 100,
+            highestScore: Math.round(highestScore * 100) / 100,
             completedVideos,
             totalQuizzes,
             achievements: achievementsWithProgress,
@@ -298,13 +309,17 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
             userStats: {
-                totalTimeSpent: totalTimeSpent,
+                totalTimeSpent: Math.round(totalTimeSpent * 100) / 100,
                 currentStreak: currentStreak,
                 longestStreak: longestStreak,
-                totalPointsEarned: totalPointsEarned,
+                totalPointsEarned: Math.round(totalPointsEarned * 100) / 100,
                 level: level,
-                experience: totalExperience,
-                starRating: starRating
+                experience: Math.round(totalExperience * 100) / 100,
+                starRating: {
+                    ...starRating,
+                    xpToNextStar: Math.round(starRating.xpToNextStar * 100) / 100,
+                    totalExperience: Math.round(starRating.totalExperience * 100) / 100
+                }
             }
         };
 

@@ -191,20 +191,25 @@ export const submitQuiz = asyncHandler(async (req, res) => {
 
         // Calculate new streak
         const today = new Date();
-        const lastActivity = user.updatedAt;
+        today.setHours(0, 0, 0, 0);
+        const lastActivity = new Date(user.updatedAt);
+        lastActivity.setHours(0, 0, 0, 0);
         const daysSinceLastActivity = Math.floor((today - lastActivity) / (1000 * 60 * 60 * 24));
         
         let newCurrentStreak = user.currentStreak;
         let newLongestStreak = user.longestStreak;
 
-        if (daysSinceLastActivity <= 1) {
-            // Activity within 24 hours, increment streak
+        if (daysSinceLastActivity === 0) {
+            // Activity today, maintain current streak
+            // Don't increment streak for multiple quizzes in same day
+        } else if (daysSinceLastActivity === 1) {
+            // Activity yesterday, increment streak
             newCurrentStreak += 1;
-            if (newCurrentStreak > user.longestStreak) {
+            if (newCurrentStreak > newLongestStreak) {
                 newLongestStreak = newCurrentStreak;
             }
         } else {
-            // Activity after 24 hours, reset streak
+            // Activity after more than 1 day, reset streak
             newCurrentStreak = 1;
         }
 
