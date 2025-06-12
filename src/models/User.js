@@ -1,31 +1,55 @@
 // models/User.js
 import mongoose from "mongoose";
+import bcrypt from "bcryptjs";
 
 const UserSchema = new mongoose.Schema({
   name: {
     type: String,
-    required: true,
+    required: [true, 'Name is required'],
     trim: true,
   },
   email: {
     type: String,
-    required: true,
+    required: [true, 'Email is required'],
     unique: true,
     lowercase: true,
+    trim: true
   },
-  // password is not stored directly in Users collection, but in UserCredentials
+  password: {
+    type: String,
+    required: function() {
+      return !this.isGoogleUser; // Password required only for non-Google users
+    },
+    minlength: [6, 'Password must be at least 6 characters']
+  },
+  profilePicture: {
+    type: String
+  },
+  isGoogleUser: {
+    type: Boolean,
+    default: false
+  },
+  isEmailVerified: {
+    type: Boolean,
+    default: false
+  },
   board: {
     type: String,
-    required: true,
+    enum: ['CBSE', 'ICSE', 'State Board'],
+    required: false // Made optional
   },
   grade: {
     type: String,
-    required: true,
+    required: false // Made optional
+  },
+  role: {
+    type: String,
+    enum: ['student', 'admin'],
+    default: 'student'
   },
   credential_id: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'UserCredential', // Reference to the UserCredential model
-    required: true
   },
   school: {
     type: String
@@ -60,14 +84,39 @@ const UserSchema = new mongoose.Schema({
     type: Number,
     default: 0
   },
-  completedVideos: {
-    type: [String],
-    default: []
-  }
+  completedVideos: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Video'
+  }],
+  resetPasswordToken: String,
+  resetPasswordExpire: Date
 }, {
   collection: 'Users', // Explicitly set collection name
   timestamps: true // Assuming you want timestamps like other models
 });
 
-const User=mongoose.model("User", UserSchema);
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password') || this.isGoogleUser) {
+    return next();
+  }
+  
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Compare password method
+UserSchema.methods.matchPassword = async function(enteredPassword) {
+  if (this.isGoogleUser) {
+    return false; // Google users can't use password login
+  }
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+const User = mongoose.model("User", UserSchema);
 export default User;

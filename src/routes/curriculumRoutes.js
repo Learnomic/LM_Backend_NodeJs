@@ -1,7 +1,8 @@
 import express from 'express';
 const router = express.Router();
-import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById} from '../controllers/curriculumController.js';
+import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById, postCurriculumForm } from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
+import { validateCurriculumForm } from '../middleware/curriculumValidation.js';
 
 // Public or Protected Routes
 router.get('/content', protect, getCompleteContent);
@@ -17,6 +18,7 @@ router.get('/quiz/:videoId', protect, getQuiz);
 //router.post('/admin/curriculum', protect, postCurriculum);
 //router.post('/admin/quiz', protect, postQuiz);
 router.post('/video', protect, addVideo);
+router.post('/postCurriculumForm', validateCurriculumForm, postCurriculumForm);
 
 // Get curriculum by subject name - must be last to avoid conflicts
 router.get('/subject/:subjectName', getCurriculumBySubjectName);

@@ -7,6 +7,7 @@ import Subject from '../models/Subject.js';
 import Topic from '../models/Topic.js';
 import mongoose from 'mongoose';
 import Subtopic from '../models/Subtopic.js';
+import TestScore from '../models/TestScore.js';
 
 // Get quiz by video URL
 export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
@@ -21,20 +22,27 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
     }
 
     try {
-        // Find the quiz
+        // First check if video exists
+        const video = await Video.findOne({ videoUrl: videoUrl.trim() });
+        console.log('Video found:', video);
+
+        if (!video) {
+            return res.status(404).json({
+                success: false,
+                message: 'Video not found in database'
+            });
+        }
+
+        // Find the quiz for this video
         const quiz = await Quiz.findOne({ videoUrl: videoUrl.trim() });
         console.log('Quiz found:', quiz);
 
         if (!quiz) {
             return res.status(404).json({
                 success: false,
-                message: 'Quiz not found'
+                message: 'No quiz found for this video'
             });
         }
-
-        // Find the video using the videoId from the quiz
-        const video = await Video.findById(quiz.videoId);
-        console.log('Video found by ID:', video);
 
         // Shuffle questions array using Fisher-Yates algorithm
         const shuffleArray = (array) => {
@@ -49,40 +57,28 @@ export const getQuizByVideoUrl = asyncHandler(async (req, res) => {
         const shuffledQuestions = shuffleArray([...quiz.questions]);
         
         // Take only first 10 questions
-        const selectedQuestions = shuffledQuestions.slice(0, 10);
+        const selectedQuestions = shuffledQuestions.slice(0, 10).map(q => ({
+            question: q.que,
+            options: q.opt,
+            correctAnswer: q.correctAnswer,
+            explanation: q.explanation
+        }));
 
-        // Prepare the response with or without subject information
+        // Prepare the response
         const response = {
             _id: quiz._id,
             videoUrl: quiz.videoUrl,
             videoId: quiz.videoId,
             questions: selectedQuestions,
             totalQuestions: quiz.questions.length,
-            selectedQuestionsCount: selectedQuestions.length
-        };
-
-        // If video is found, get subject information
-        if (video) {
-            response.subject = {
+            selectedQuestionsCount: selectedQuestions.length,
+            subject: {
                 name: video.subName,
                 chapterName: video.chapterName,
                 topicName: video.topicName,
                 subtopicName: video.subtopicName
-            };
-        } else {
-            // If video not found by ID, try to find it by URL
-            const videoByUrl = await Video.findOne({ videoUrl: videoUrl.trim() });
-            console.log('Video found by URL:', videoByUrl);
-
-            if (videoByUrl) {
-                response.subject = {
-                    name: videoByUrl.subName,
-                    chapterName: videoByUrl.chapterName,
-                    topicName: videoByUrl.topicName,
-                    subtopicName: videoByUrl.subtopicName
-                };
             }
-        }
+        };
 
         res.status(200).json({
             success: true,
@@ -315,3 +311,430 @@ export const getUserQuizHistory = async (req, res) => {
     res.status(500).json({ error: 'Error fetching user history' });
   }
 };
+
+// Generate random question paper for a subject
+export const generateRandomQuestionPaper = asyncHandler(async (req, res) => {
+    const { subjectName } = req.params;
+    const QUESTIONS_REQUIRED = 25;
+
+    try {
+        // Find all quizzes for the given subject
+        const quizzes = await Quiz.find({
+            'questions.subjectName': subjectName
+        }).select('questions');
+
+        if (!quizzes || quizzes.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No quizzes found for subject: ${subjectName}`
+            });
+        }
+
+        // Collect all questions from all quizzes
+        let allQuestions = [];
+        quizzes.forEach(quiz => {
+            const subjectQuestions = quiz.questions.filter(q => q.subjectName === subjectName);
+            allQuestions = [...allQuestions, ...subjectQuestions];
+        });
+
+        if (allQuestions.length < QUESTIONS_REQUIRED) {
+            return res.status(400).json({
+                success: false,
+                message: `Not enough questions available. Found ${allQuestions.length} questions, but ${QUESTIONS_REQUIRED} are required.`
+            });
+        }
+
+        // Shuffle questions using Fisher-Yates algorithm
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+
+        // Shuffle and select required number of questions
+        const shuffledQuestions = shuffleArray([...allQuestions]);
+        const selectedQuestions = shuffledQuestions.slice(0, QUESTIONS_REQUIRED);
+
+        // Format response
+        const response = {
+            subject: subjectName,
+            totalQuestions: selectedQuestions.length,
+            questions: selectedQuestions.map(q => ({
+                question: q.question,
+                options: q.options,
+                correctAnswer: q.correctAnswer
+            }))
+        };
+
+        res.status(200).json({
+            success: true,
+            data: response
+        });
+
+    } catch (error) {
+        console.error('Error generating question paper:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error generating question paper',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// Generate question paper by merging quizzes from a subject
+export const generateSubjectQuestionPaper = asyncHandler(async (req, res) => {
+    const { subjectName } = req.params;
+    const QUESTIONS_REQUIRED = 25;
+
+    try {
+        // Find all videos for the given subject
+        const videos = await Video.find({ subName: subjectName });
+        console.log(`Found ${videos.length} videos for subject: ${subjectName}`);
+
+        if (!videos || videos.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No videos found for subject: ${subjectName}`
+            });
+        }
+
+        // Get all video URLs
+        const videoUrls = videos.map(video => video.videoUrl);
+
+        // Find all quizzes for these videos
+        const quizzes = await Quiz.find({ videoUrl: { $in: videoUrls } });
+        console.log(`Found ${quizzes.length} quizzes for subject: ${subjectName}`);
+
+        if (!quizzes || quizzes.length === 0) {
+            return res.status(404).json({
+                success: false,
+                message: `No quizzes found for subject: ${subjectName}`
+            });
+        }
+
+        // Collect all questions from all quizzes
+        let allQuestions = [];
+        quizzes.forEach(quiz => {
+            allQuestions = [...allQuestions, ...quiz.questions];
+        });
+
+        console.log(`Total questions found: ${allQuestions.length}`);
+
+        if (allQuestions.length < QUESTIONS_REQUIRED) {
+            return res.status(400).json({
+                success: false,
+                message: `Not enough questions available. Found ${allQuestions.length} questions, but ${QUESTIONS_REQUIRED} are required.`
+            });
+        }
+
+        // Shuffle questions using Fisher-Yates algorithm
+        const shuffleArray = (array) => {
+            for (let i = array.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [array[i], array[j]] = [array[j], array[i]];
+            }
+            return array;
+        };
+
+        // Shuffle and select required number of questions
+        const shuffledQuestions = shuffleArray([...allQuestions]);
+        const selectedQuestions = shuffledQuestions.slice(0, QUESTIONS_REQUIRED);
+
+        // Format response
+        const response = {
+            subject: subjectName,
+            totalQuestions: selectedQuestions.length,
+            questions: selectedQuestions.map(q => ({
+                question: q.que,
+                options: q.opt,
+                correctAnswer: q.correctAnswer,
+                explanation: q.explanation
+            }))
+        };
+
+        res.status(200).json({
+            success: true,
+            data: response
+        });
+
+    } catch (error) {
+        console.error('Error generating question paper:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error generating question paper',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// Submit test score
+export const submitTestScore = asyncHandler(async (req, res) => {
+    try {
+        console.log('Request body:', JSON.stringify(req.body, null, 2));
+        
+        const {
+            quizId,
+            subjectId,
+            subjectName,
+            totalQuestions,
+            correctAnswers,
+            score,
+            timeSpent,
+            answers
+        } = req.body;
+
+        // Get userId from authenticated user
+        const userId = req.user._id;
+
+        console.log('Received test score submission:', {
+            userId,
+            quizId,
+            subjectId,
+            subjectName,
+            totalQuestions,
+            correctAnswers,
+            score,
+            timeSpent,
+            answersCount: answers?.length
+        });
+
+        // Validate required fields
+        if (!quizId || !subjectId || !subjectName || !totalQuestions || !correctAnswers || !score || !timeSpent || !answers) {
+            console.error('Missing required fields:', {
+                quizId: !!quizId,
+                subjectId: !!subjectId,
+                subjectName: !!subjectName,
+                totalQuestions: !!totalQuestions,
+                correctAnswers: !!correctAnswers,
+                score: !!score,
+                timeSpent: !!timeSpent,
+                answers: !!answers
+            });
+            return res.status(400).json({
+                success: false,
+                message: 'Missing required fields',
+                error: 'Please provide all required fields'
+            });
+        }
+
+        // Create new test score
+        const testScore = new TestScore({
+            userId,
+            quizId,
+            subjectId,
+            subjectName,
+            totalQuestions,
+            correctAnswers,
+            score,
+            timeSpent,
+            answers
+        });
+
+        console.log('Created test score object:', testScore);
+
+        // Save the test score
+        const savedTestScore = await testScore.save();
+        console.log('Saved test score:', savedTestScore);
+
+        // Get current user data
+        const user = await User.findById(userId);
+        console.log('Found user:', user ? 'Yes' : 'No');
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // Calculate points and experience
+        const pointsEarned = Math.round(score * 10); // 10 points per percentage point
+        const experienceEarned = Math.round(score * 5); // 5 XP per percentage point
+
+        // Calculate new streak
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const lastActivity = new Date(user.updatedAt);
+        lastActivity.setHours(0, 0, 0, 0);
+        const daysSinceLastActivity = Math.floor((today - lastActivity) / (1000 * 60 * 60 * 24));
+        
+        let newCurrentStreak = user.currentStreak;
+        let newLongestStreak = user.longestStreak;
+
+        if (daysSinceLastActivity === 0) {
+            // Activity today, maintain current streak
+            // Don't increment streak for multiple quizzes in same day
+        } else if (daysSinceLastActivity === 1) {
+            // Activity yesterday, increment streak
+            newCurrentStreak += 1;
+            if (newCurrentStreak > newLongestStreak) {
+                newLongestStreak = newCurrentStreak;
+            }
+        } else {
+            // Activity after more than 1 day, reset streak
+            newCurrentStreak = 1;
+        }
+
+        // Update user stats
+        const updatedUser = await User.findByIdAndUpdate(
+            userId,
+            {
+                $inc: { 
+                    totalTimeSpent: timeSpent,
+                    totalPoints: pointsEarned,
+                    experience: experienceEarned
+                },
+                $set: {
+                    currentStreak: newCurrentStreak,
+                    longestStreak: newLongestStreak
+                }
+            },
+            { new: true }
+        );
+
+        res.status(201).json({
+            success: true,
+            message: 'Test score submitted successfully',
+            data: {
+                testScore: savedTestScore,
+                stats: {
+                    pointsEarned,
+                    experienceEarned,
+                    newCurrentStreak,
+                    newLongestStreak
+                }
+            }
+        });
+    } catch (error) {
+        console.error('Detailed error in submitTestScore:', {
+            message: error.message,
+            stack: error.stack,
+            name: error.name,
+            code: error.code
+        });
+        
+        // Handle specific MongoDB errors
+        if (error.name === 'ValidationError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Validation Error',
+                error: Object.values(error.errors).map(err => err.message)
+            });
+        }
+        
+        if (error.name === 'CastError') {
+            return res.status(400).json({
+                success: false,
+                message: 'Invalid ID format',
+                error: `Invalid ${error.path}: ${error.value}`
+            });
+        }
+
+        res.status(500).json({
+            success: false,
+            message: 'Error submitting test score',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// Get test history for a user
+export const getTestHistory = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const page = parseInt(req.query.page) || 1;
+        const limit = parseInt(req.query.limit) || 10;
+        const subjectId = req.query.subjectId;
+        const startDate = req.query.startDate;
+        const endDate = req.query.endDate;
+
+        // Build query
+        const query = { userId };
+        
+        if (subjectId) {
+            query.subjectId = subjectId;
+        }
+
+        if (startDate && endDate) {
+            query.createdAt = {
+                $gte: new Date(startDate),
+                $lte: new Date(endDate)
+            };
+        }
+
+        // Get total count for pagination
+        const total = await TestScore.countDocuments(query);
+
+        // Get test scores with pagination
+        const testScores = await TestScore.find(query)
+            .sort({ createdAt: -1 }) // Sort by newest first
+            .skip((page - 1) * limit)
+            .limit(limit)
+            .populate('subjectId', 'name')
+            .populate('quizId', 'title');
+
+        // Calculate statistics
+        const stats = await TestScore.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: null,
+                    averageScore: { $avg: '$score' },
+                    highestScore: { $max: '$score' },
+                    totalTests: { $sum: 1 },
+                    totalCorrectAnswers: { $sum: '$correctAnswers' },
+                    totalQuestions: { $sum: '$totalQuestions' },
+                    totalTimeSpent: { $sum: '$timeSpent' }
+                }
+            }
+        ]);
+
+        // Get subject-wise statistics
+        const subjectStats = await TestScore.aggregate([
+            { $match: query },
+            {
+                $group: {
+                    _id: '$subjectId',
+                    subjectName: { $first: '$subjectName' },
+                    averageScore: { $avg: '$score' },
+                    highestScore: { $max: '$score' },
+                    totalTests: { $sum: 1 },
+                    totalCorrectAnswers: { $sum: '$correctAnswers' },
+                    totalQuestions: { $sum: '$totalQuestions' }
+                }
+            },
+            { $sort: { totalTests: -1 } }
+        ]);
+
+        res.status(200).json({
+            success: true,
+            data: {
+                testScores,
+                pagination: {
+                    page,
+                    limit,
+                    total,
+                    pages: Math.ceil(total / limit)
+                },
+                overallStats: stats[0] || {
+                    averageScore: 0,
+                    highestScore: 0,
+                    totalTests: 0,
+                    totalCorrectAnswers: 0,
+                    totalQuestions: 0,
+                    totalTimeSpent: 0
+                },
+                subjectStats
+            }
+        });
+    } catch (error) {
+        console.error('Error in getTestHistory:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error fetching test history',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});

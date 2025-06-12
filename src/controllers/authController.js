@@ -6,6 +6,8 @@ import User from "../models/User.js"
 import UserCredential from "../models/UserCredential.js"
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import ResetToken from '../models/ResetToken.js';
+import OTP from '../models/OTP.js';
 
 dotenv.config();
 
@@ -33,9 +35,6 @@ transporter.verify(function(error, success) {
         console.log('Email server is ready to send messages');
     }
 });
-
-// Store reset tokens (in production, use Redis or database)
-const resetTokens = new Map();
 
 export const register = async (req, res) => {
   const { name, email, password, board, grade } = req.body;
@@ -156,8 +155,83 @@ export const login = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-  // Implementation for changing password
-  res.status(501).json({ message: "Change password not implemented" });
+    try {
+        const { currentPassword, newPassword } = req.body;
+        const userId = req.user._id;
+
+        if (!currentPassword || !newPassword) {
+            return res.status(400).json({ message: "Current password and new password are required" });
+        }
+
+        // Find user and their credentials
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({ message: "User not found" });
+        }
+
+        const userCredential = await UserCredential.findById(user.credential_id);
+        if (!userCredential) {
+            return res.status(404).json({ message: "User credentials not found" });
+        }
+
+        // Verify current password
+        const isMatch = await bcrypt.compare(currentPassword, userCredential.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Current password is incorrect" });
+        }
+
+        // Hash new password
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        // Update password
+        userCredential.password = hashedPassword;
+        await userCredential.save();
+
+        res.status(200).json({ message: "Password changed successfully" });
+
+    } catch (error) {
+        console.error('Change password error:', error);
+        res.status(500).json({ 
+            message: "Error changing password",
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+};
+
+export const verifyResetToken = async (req, res) => {
+    try {
+        const { token } = req.params;
+
+        if (!token) {
+            return res.status(400).json({
+                success: false,
+                message: "Token is required"
+            });
+        }
+
+        // Find the token in database
+        const resetToken = await ResetToken.findOne({ token });
+        if (!resetToken) {
+            return res.status(400).json({
+                success: false,
+                message: "Invalid or expired reset token"
+            });
+        }
+
+        res.status(200).json({
+            success: true,
+            message: "Token is valid",
+            email: resetToken.email
+        });
+
+    } catch (error) {
+        console.error('Verify token error:', error);
+        res.status(500).json({
+            success: false,
+            message: "Error verifying token",
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
 };
 
 export const forgetPassword = async (req, res) => {
@@ -169,67 +243,49 @@ export const forgetPassword = async (req, res) => {
         }
 
         console.log('Processing forgot password request for:', email);
-        console.log('Email configuration:', {
-            user: process.env.EMAIL_USER,
-            hasPassword: !!process.env.EMAIL_PASSWORD,
-            frontendUrl: process.env.FRONTEND_URL
-        });
 
         // Find user by email
         const userCredential = await UserCredential.findOne({ email });
         if (!userCredential) {
-            console.log('No user found with email:', email);
-            return res.status(404).json({ message: "No account found with this email" });
+            // Don't reveal that the email doesn't exist for security
+            return res.status(200).json({ 
+                message: "If your email is registered, you will receive a password reset OTP"
+            });
         }
 
-        console.log('User found, generating reset token');
+        // Generate a 6-digit OTP
+        const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
-        // Generate reset token
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const tokenExpiry = Date.now() + 3600000; // Token valid for 1 hour
+        // Save OTP to database
+        await OTP.findOneAndUpdate(
+            { email },
+            { email, otp },
+            { upsert: true, new: true }
+        );
 
-        // Store token (in production, store in database)
-        resetTokens.set(email, {
-            token: resetToken,
-            expiry: tokenExpiry
-        });
-
-        // Create reset URL
-        const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-        console.log('Reset URL generated:', resetUrl);
-
-        // Send email
+        // Send OTP email
         const mailOptions = {
             from: process.env.EMAIL_USER,
             to: email,
-            subject: 'Password Reset Request',
+            subject: 'Password Reset OTP',
             html: `
                 <h1>Password Reset Request</h1>
-                <p>You requested a password reset. Click the link below to reset your password:</p>
-                <a href="${resetUrl}">Reset Password</a>
-                <p>This link will expire in 1 hour.</p>
+                <p>Your OTP for password reset is: <strong>${otp}</strong></p>
+                <p>This OTP will expire in 5 minutes.</p>
                 <p>If you didn't request this, please ignore this email.</p>
             `
         };
 
-        console.log('Attempting to send email...');
         await transporter.sendMail(mailOptions);
-        console.log('Email sent successfully');
 
         res.status(200).json({ 
-            message: "Password reset email sent successfully",
-            note: "Check your email for reset instructions"
+            message: "If your email is registered, you will receive a password reset OTP"
         });
 
     } catch (error) {
         console.error('Forgot password error:', error);
-        console.error('Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
         res.status(500).json({ 
-            message: "Error processing password reset request",
+            message: "Error processing forgot password request",
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
@@ -237,30 +293,29 @@ export const forgetPassword = async (req, res) => {
 
 export const resetPassword = async (req, res) => {
     try {
-        const { token, newPassword } = req.body;
+        const { email, otp, newPassword } = req.body;
 
-        if (!token || !newPassword) {
-            return res.status(400).json({ message: "Token and new password are required" });
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({
+                message: "Email, OTP, and new password are required"
+            });
         }
 
-        // Find the email associated with this token
-        let email = null;
-        for (const [storedEmail, tokenData] of resetTokens.entries()) {
-            if (tokenData.token === token) {
-                email = storedEmail;
-                break;
-            }
-        }
+        console.log('Attempting to reset password for email:', email);
+        console.log('Provided OTP:', otp);
 
-        if (!email) {
-            return res.status(400).json({ message: "Invalid or expired reset token" });
-        }
+        // Find the OTP in database
+        const otpRecord = await OTP.findOne({ email, otp });
+        console.log('Found OTP record:', otpRecord);
 
-        // Check if token is expired
-        const tokenData = resetTokens.get(email);
-        if (Date.now() > tokenData.expiry) {
-            resetTokens.delete(email);
-            return res.status(400).json({ message: "Reset token has expired" });
+        if (!otpRecord) {
+            // Let's check if there's any OTP for this email
+            const anyOtpForEmail = await OTP.findOne({ email });
+            console.log('Any OTP found for this email:', anyOtpForEmail);
+            
+            return res.status(400).json({
+                message: "Invalid or expired OTP"
+            });
         }
 
         // Find user credentials
@@ -276,14 +331,16 @@ export const resetPassword = async (req, res) => {
         userCredential.password = hashedPassword;
         await userCredential.save();
 
-        // Remove used token
-        resetTokens.delete(email);
+        // Delete the used OTP
+        await OTP.deleteOne({ _id: otpRecord._id });
 
-        res.status(200).json({ message: "Password has been reset successfully" });
+        res.status(200).json({
+            message: "Password has been reset successfully"
+        });
 
     } catch (error) {
         console.error('Reset password error:', error);
-        res.status(500).json({ 
+        res.status(500).json({
             message: "Error resetting password",
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });

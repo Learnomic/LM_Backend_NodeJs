@@ -1,0 +1,303 @@
+.curriculum-form-container {
+    min-height: 100vh;
+    background-color: #f3f4f6; /* gray-50 */
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+.form-wrapper {
+    max-width: 48rem; /* max-w-3xl */
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: 1rem;
+    padding-right: 1rem;
+    background-color: #ffffff;
+    border-radius: 0.5rem;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.form-header {
+    border-bottom: 1px solid #e5e7eb; /* border-gray-200 */
+    padding: 1.5rem;
+}
+
+.form-title {
+    font-size: 1.5rem; /* text-2xl */
+    font-weight: 500; /* font-medium */
+    color: #1f2937; /* text-gray-900 */
+}
+
+.form-description {
+    margin-top: 0.5rem;
+    font-size: 0.875rem; /* text-sm */
+    color: #6b7280; /* text-gray-500 */
+}
+
+.form-sections {
+    display: flex;
+    flex-direction: column;
+}
+
+.section-card {
+    padding: 1.5rem;
+}
+
+.section-card + .section-card {
+    border-top: 1px solid #e5e7eb; /* divide-y divide-gray-200 */
+}
+
+.section-title {
+    font-size: 1.125rem; /* text-lg */
+    font-weight: 500; /* font-medium */
+    color: #1f2937; /* text-gray-900 */
+    margin-bottom: 1rem;
+}
+
+.input-group-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (min-width: 768px) {
+    .input-group-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+.input-label {
+    display: block;
+    font-size: 0.875rem; /* text-sm */
+    font-weight: 500; /* font-medium */
+    color: #374151; /* text-gray-700 */
+    margin-bottom: 0.25rem;
+}
+
+.text-input,
+.select-input,
+.textarea-input {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #d1d5db; /* border-gray-300 */
+    border-radius: 0.375rem;
+    outline: none;
+}
+
+.text-input:focus,
+.select-input:focus,
+.textarea-input:focus {
+    border-color: #3b82f6; /* blue-500 */
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5); /* ring-2 ring-blue-500 */
+}
+
+.section-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.add-button {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    border: 1px solid transparent;
+    font-size: 0.875rem;
+    font-weight: 500;
+    border-radius: 0.375rem;
+    color: #ffffff;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+}
+
+.add-button.blue {
+    background-color: #2563eb; /* blue-600 */
+}
+
+.add-button.blue:hover {
+    background-color: #1d4ed8; /* blue-700 */
+}
+
+.add-button.green {
+    background-color: #10b981; /* green-600 */
+}
+
+.add-button.green:hover {
+    background-color: #059669; /* green-700 */
+}
+
+.add-button.purple {
+    background-color: #7c3aed; /* purple-600 */
+}
+
+.add-button.purple:hover {
+    background-color: #6d28d9; /* purple-700 */
+}
+
+.add-button.yellow {
+    background-color: #d97706; /* yellow-600 */
+}
+
+.add-button.yellow:hover {
+    background-color: #b45309; /* yellow-700 */
+}
+
+.add-button.indigo {
+    background-color: #4f46e5; /* indigo-600 */
+}
+
+.add-button.indigo:hover {
+    background-color: #4338ca; /* indigo-700 */
+}
+
+.item-card-level-1 {
+    background-color: #f9fafb; /* gray-50 */
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+    margin-bottom: 1rem;
+}
+
+.item-card-level-2 {
+    background-color: #ffffff;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+    margin-bottom: 1rem;
+}
+
+.item-card-level-3 {
+    background-color: #f9fafb; /* gray-50 */
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+    margin-bottom: 1rem;
+}
+
+.item-card-level-4 {
+    background-color: #ffffff;
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+    margin-bottom: 1rem;
+}
+
+.item-card-level-5 {
+    background-color: #f9fafb; /* gray-50 */
+    padding: 1rem;
+    border-radius: 0.5rem;
+    border: 1px solid #e5e7eb; /* border-gray-200 */
+    margin-bottom: 1rem;
+}
+
+.item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+.item-title {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #1f2937; /* text-gray-900 */
+}
+
+.section-subtitle {
+    font-size: 1rem;
+    font-weight: 500;
+    color: #1f2937; /* text-gray-900 */
+}
+
+.remove-button {
+    color: #9ca3af; /* gray-400 */
+    cursor: pointer;
+    transition: color 0.2s ease-in-out;
+}
+
+.remove-button:hover {
+    color: #ef4444; /* red-500 */
+}
+
+.icon {
+    height: 1.25rem;
+    width: 1.25rem;
+}
+
+.options-grid {
+    display: grid;
+    grid-template-columns: repeat(1, minmax(0, 1fr));
+    gap: 1rem;
+}
+
+@media (min-width: 640px) {
+    .options-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+.form-actions {
+    padding: 1.5rem;
+    background-color: #f9fafb; /* gray-50 */
+}
+
+.submit-button {
+    width: 100%;
+    background-color: #2563eb; /* blue-600 */
+    color: #ffffff;
+    padding-top: 0.75rem;
+    padding-bottom: 0.75rem;
+    padding-left: 1.5rem;
+    padding-right: 1.5rem;
+    border-radius: 0.375rem;
+    cursor: pointer;
+    transition: background-color 0.2s ease-in-out;
+    font-weight: 500;
+    font-size: 1rem;
+}
+
+.submit-button:hover {
+    background-color: #1d4ed8; /* blue-700 */
+}
+
+.submit-button:disabled {
+    background-color: #93c5fd; /* blue-300 */
+    cursor: not-allowed;
+}
+
+.response-card {
+    padding: 1.5rem;
+    border-top: 1px solid #e5e7eb; /* border-gray-200 */
+}
+
+.response-card.success .response-title {
+    color: #065f46; /* green-800 */
+}
+
+.response-card.error .response-title {
+    color: #991b1b; /* red-800 */
+}
+
+.response-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.response-code {
+    white-space: pre-wrap;
+    background-color: #ffffff;
+    padding: 1rem;
+    border-radius: 0.25rem;
+    border: 1px solid; /* will be colored by success/error */
+    font-size: 0.875rem;
+}
+
+.response-card.success .response-code {
+    border-color: #a7f3d0; /* green-100 */
+}
+
+.response-card.error .response-code {
+    border-color: #fecaca; /* red-100 */
+} 

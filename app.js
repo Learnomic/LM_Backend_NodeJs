@@ -29,6 +29,7 @@ app.use('/api/videos', curriculumRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log('JWT_SECRET loaded:', process.env.JWT_SECRET ? 'Yes' : 'No', process.env.JWT_SECRET ? '(Value present)' : '(Value missing)');
 });
 
 // mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
