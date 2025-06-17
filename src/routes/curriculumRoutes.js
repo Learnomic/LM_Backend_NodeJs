@@ -1,11 +1,11 @@
 import express from 'express';
 const router = express.Router();
-import { getSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById} from '../controllers/curriculumController.js';
+import { postSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById} from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
 
 // Public or Protected Routes
 router.get('/content', protect, getCompleteContent);
-router.get('/subjects', getSubjects);
+router.post('/subjects', postSubjects);
 router.get('/chapters/:subjectName', protect, getChapters);
 router.get('/topics/:chapterId', protect, getTopics);
 router.get('/subtopics/:topicId', protect, getSubtopics);

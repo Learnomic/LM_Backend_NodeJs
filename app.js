@@ -11,6 +11,7 @@ import authRoutes from './src/routes/authRoutes.js';
 import QuizRoutes from './src/routes/quizRoutes.js';
 import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
+import questionPaperRoute from './src/routes/QuestPaperRoute.js';
 
 // Connect to MongoDB
 connectDB();
@@ -30,6 +31,12 @@ app.use('/api/videos', curriculumRoutes);
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+app.get('/api/test', (req, res) => {
+  res.send('API is working');
+});
+
+app.use('/api/question-paper', questionPaperRoute);
 
 // mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
 //     .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
