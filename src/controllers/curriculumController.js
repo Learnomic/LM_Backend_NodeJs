@@ -173,6 +173,43 @@ export const postSubjects = asyncHandler(async (req, res) => {
     }
 });
 
+export const getAvailableBoardsAndGrades = asyncHandler(async (req, res) => {
+    try {
+        const boards = await Subject.distinct('board');
+        const grades = await Subject.distinct('grade');
+
+        res.status(200).json({
+            success: true,
+            data: {
+                boards,
+                grades
+            }
+        });
+    } catch (error) {
+        console.error('Error fetching available options:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
+export const getGradesForBoard = asyncHandler(async (req, res) => {
+    try {
+        const { board } = req.params;
+        if (!board) {
+            return res.status(400).json({ success: false, message: "Board is required" });
+        }
+
+        const grades = await Subject.find({ board }).distinct('grade');
+
+        res.status(200).json({
+            success: true,
+            data: grades
+        });
+    } catch (error) {
+        console.error('Error fetching grades:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 export const getChapters = asyncHandler(async (req, res) => {
     try {
         const { subjectName } = req.params;
