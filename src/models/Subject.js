@@ -15,6 +15,11 @@ const subjectSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true
+    },
+    medium: {
+        type: String,
+        required: true,
+        trim: true
     }
 }, {
     timestamps: true,

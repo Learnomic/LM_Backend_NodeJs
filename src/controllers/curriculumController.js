@@ -128,8 +128,8 @@ function buildCompleteContentFast(subject, allChapters, allTopics, allSubtopics,
 
 export const postSubjects = asyncHandler(async (req, res) => {
     try {
-        const { board, grade, subject } = req.body; // Accept subject as well
-        const cacheKey = getCacheKey('subjects', board || 'all', grade || 'all', subject || 'all');
+        const { board, grade, subject, medium } = req.body; // Add medium to destructuring
+        const cacheKey = getCacheKey('subjects', board || 'all', grade || 'all', subject || 'all', medium || 'all');
 
         // Check cache
         const cached = getCache(cacheKey);
@@ -146,17 +146,18 @@ export const postSubjects = asyncHandler(async (req, res) => {
             ];
         }
         if (subject) query.subject = subject;
+        if (medium) query.medium = medium; // Add medium to query
 
         const subjects = await Subject.find(query)
-            .select('subject board grade')
+            .select('subject board grade medium') // Include medium in the select
             .lean();
 
         if (!subjects || subjects.length === 0) {
             return res.status(404).json({
-                message: (board || grade || subject)
-                    ? 'No subjects found for the specified board, grade, or subject'
+                message: (board || grade || subject || medium)
+                    ? 'No subjects found for the specified board, grade, subject, or medium'
                     : 'No subjects found in the database',
-                query: { board, grade, subject }
+                query: { board, grade, subject, medium }
             });
         }
 
@@ -372,9 +373,7 @@ export const getQuiz = asyncHandler(async (req, res) => {
     }
 });
 
-// @desc    Get curriculum by subject name (ULTRA OPTIMIZED)
-// @route   GET /api/curriculum/:subjectName
-// @access  Public
+
 export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
     const { subjectName } = req.params;
     const { board, grade } = req.query; // Add board and grade as query parameters

@@ -12,7 +12,6 @@ router.get('/quiz', getQuizByVideoUrl);
 
 export default router;
 
-
 // import express from 'express';
 // import { body } from 'express-validator';
 // import { submitQuiz } from '../controllers/quizController.js';
