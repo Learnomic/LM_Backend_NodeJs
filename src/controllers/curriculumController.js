@@ -210,6 +210,41 @@ export const getGradesForBoard = asyncHandler(async (req, res) => {
     }
 });
 
+export const getMediumsForBoard = asyncHandler(async (req, res) => {
+    try {
+        const { board } = req.params;
+        if (!board) {
+            return res.status(400).json({ success: false, message: "Board is required" });
+        }
+
+        // Get all mediums for the board, filtering out null/undefined values
+        const mediums = await Subject.find({ 
+            board,
+            medium: { $exists: true, $ne: null } // Only get documents where medium exists and is not null
+        }).distinct('medium');
+
+        // Additional filter to remove any falsy values that might have slipped through
+        const filteredMediums = mediums.filter(medium => medium && medium.trim() !== '');
+
+        // If no mediums found, it could mean the board doesn't use mediums
+        if (filteredMediums.length === 0) {
+            res.status(200).json({
+                success: true,
+                data: [],
+                message: "No mediums available for this board (may not be applicable)"
+            });
+        } else {
+            res.status(200).json({
+                success: true,
+                data: filteredMediums
+            });
+        }
+    } catch (error) {
+        console.error('Error fetching mediums:', error);
+        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    }
+});
+
 export const getChapters = asyncHandler(async (req, res) => {
     try {
         const { subjectName } = req.params;

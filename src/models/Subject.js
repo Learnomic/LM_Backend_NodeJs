@@ -18,7 +18,7 @@ const subjectSchema = new mongoose.Schema({
     },
     medium: {
         type: String,
-        required: true,
+        required: false,
         trim: true
     }
 }, {
