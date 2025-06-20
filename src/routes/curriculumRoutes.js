@@ -4,7 +4,6 @@ import { postSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz,
     getAvailableBoardsAndGrades, getGradesForBoard, getMediumsForBoard} from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
 
-// Public or Protected Routes
 router.get('/available-options', getAvailableBoardsAndGrades);
 router.get('/grades/:board', getGradesForBoard);
 router.get('/mediums/:board', getMediumsForBoard);
@@ -18,7 +17,6 @@ router.get('/videos/:subtopicId', protect, getVideos);
 router.get('/video/:videoId', protect, getVideoById);
 router.get('/quiz/:videoId', protect, getQuiz);
 
-// Admin Routes
 //router.post('/admin/curriculum', protect, postCurriculum);
 //router.post('/admin/quiz', protect, postQuiz);
 router.post('/video', protect, addVideo);
