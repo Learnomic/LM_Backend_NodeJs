@@ -445,12 +445,20 @@ export const getQuiz = asyncHandler(async (req, res) => {
     }
 });
 
-
+// @desc    Get curriculum by subject name (POST with optional medium support)
+// @route   POST /api/curriculum/subject
+// @access  Private
 export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
-    const { subjectName } = req.params;
-    const { board, grade } = req.query; // Add board and grade as query parameters
+    const { subjectName, board, grade, medium } = req.body;
     
-    const cacheKey = getCacheKey('curriculum', subjectName, board, grade);
+    if (!subjectName || !board || !grade) {
+        return res.status(400).json({
+            success: false,
+            message: 'subjectName, board, and grade are required'
+        });
+    }
+
+    const cacheKey = getCacheKey('curriculum', subjectName, board, grade, medium || 'none');
 
     try {
         // Check cache first
@@ -462,9 +470,21 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
             });
         }
 
-        // Get all data in parallel with board and grade filtering
+        // Create base query without medium
+        const subjectQuery = {
+            subject: subjectName,
+            board,
+            grade
+        };
+
+        // Add medium to query if provided
+        if (medium) {
+            subjectQuery.medium = medium;
+        }
+
+        // Get all data in parallel
         const [subject, allChapters, allTopics, allSubtopics, allVideos] = await Promise.all([
-            Subject.findOne({ subject: subjectName, board, grade }).lean(),
+            Subject.findOne(subjectQuery).lean(),
             Chapter.find({ subject: subjectName }).lean(),
             Topic.find().lean(),
             Subtopic.find({ subName: subjectName }).lean(),
@@ -473,7 +493,9 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
 
         if (!subject) {
             return res.status(404).json({ 
-                message: `Subject not found for ${board} board and grade ${grade}` 
+                success: false,
+                message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`,
+                query: subjectQuery // Include the actual query used for debugging
             });
         }
 
@@ -493,7 +515,8 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch curriculum',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
         });
     }
 });

@@ -25,5 +25,7 @@ router.post('/video', protect, addVideo);
 router.get('/subject/:subjectName', getCurriculumBySubjectName);
 //router.post('/postCurriculumForm', postCurriculumForm);
 
+// Change from GET to POST and update the path
+router.post('/subject', protect, getCurriculumBySubjectName);
 
 export default router;
