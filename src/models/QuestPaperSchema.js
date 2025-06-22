@@ -6,8 +6,9 @@ const questionPaperSchema = new mongoose.Schema({
     required: true
   },
   subject: String,
-  videoId: String,
-  videoUrl: String,
+  grade: String,
+  medium: String,
+  board: String,
   questions: [
     {
       que: String,

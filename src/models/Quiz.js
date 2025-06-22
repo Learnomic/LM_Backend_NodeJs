@@ -10,6 +10,21 @@ const quizSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+        board: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    grade: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    medium: {
+        type: String,
+        required: false,
+        trim: true
+    },
         subName: {
         type: String,
         required: true,

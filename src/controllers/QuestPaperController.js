@@ -1,4 +1,4 @@
-import Quiz from '../models/Quiz.js'; // must be ESM compatible
+import Quiz from '../models/Quiz.js';
 import QuestionPaper from '../models/QuestPaperSchema.js';
 import Video from '../models/Video.js';
 
@@ -6,33 +6,48 @@ function shuffleArray(arr) {
   return arr.sort(() => Math.random() - 0.5);
 }
 
+// Generate Question Paper
 export const generateQuestionPaper = async (req, res) => {
   try {
-    const { subName, userId } = req.body;
+    const { subName, board, grade, medium } = req.body;
+    const userId = req.user._id;
 
-    if (!subName || !userId)
-      return res.status(400).json({ message: 'subName and userId required' });
+    if (!subName || !board || !grade || !userId) {
+      return res.status(400).json({ message: 'subName, board, grade are required, and user must be authenticated' });
+    }
 
-    // Fetch all quizzes from the given subject
-    const quizzes = await Quiz.find({ subName });
+    const query = { subName, board, grade };
+    if (medium && medium.trim() !== '') {
+      query.medium = medium;
+    }
 
-    if (!quizzes.length)
-      return res.status(404).json({ message: 'No quizzes found for this subject' });
+    const quizzes = await Quiz.find(query);
 
-  const allQuestions = quizzes
-  .flatMap(q => q.questions)
-  .filter(q => q.opt && Object.keys(q.opt).length === 4);
+    if (!quizzes.length) {
+      return res.status(404).json({ message: 'No quizzes found for the given criteria' });
+    }
 
-    if (allQuestions.length < 25)
-      return res.status(400).json({ message: 'Not enough questions in this subject' });
+    const allQuestions = quizzes
+      .flatMap(q => q.questions)
+.filter(q => {
+  const opt = q.opt;
+  return opt &&
+    typeof opt === 'object' &&
+    ['a', 'b', 'c', 'd'].every(k => typeof opt[k] === 'string' && opt[k].trim() !== '');
+});
+
+    if (allQuestions.length < 25) {
+      return res.status(400).json({ message: 'Not enough questions available to generate paper' });
+    }
 
     const shuffled = shuffleArray(allQuestions).slice(0, 25);
 
     const paper = new QuestionPaper({
       userId,
       subject: subName,
-      videoId: null,
-      videoUrl: null,
+      grade,
+      board,
+      medium: medium?.trim() || undefined,
       questions: shuffled,
       userAnswers: [],
       score: 0
@@ -40,17 +55,18 @@ export const generateQuestionPaper = async (req, res) => {
 
     await paper.save();
 
-    res.status(201).json({ message: 'Question paper generated for subject', data: paper });
+    res.status(201).json({ message: 'Question paper generated successfully', data: paper });
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: 'Server Error' });
   }
 };
 
-
+// Submit Question Paper
 export const submitQuestionPaper = async (req, res) => {
   try {
     const { paperId, answers } = req.body;
+    const userId = req.user._id;
 
     const paper = await QuestionPaper.findById(paperId);
     if (!paper)
