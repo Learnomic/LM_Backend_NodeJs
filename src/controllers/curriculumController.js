@@ -192,22 +192,29 @@ export const getAvailableBoardsAndGrades = asyncHandler(async (req, res) => {
 });
 
 export const getGradesForBoard = asyncHandler(async (req, res) => {
-    try {
-        const { board } = req.params;
-        if (!board) {
-            return res.status(400).json({ success: false, message: "Board is required" });
-        }
+  try {
+    const { board } = req.params;
+    const { medium } = req.query;
 
-        const grades = await Subject.find({ board }).distinct('grade');
-
-        res.status(200).json({
-            success: true,
-            data: grades
-        });
-    } catch (error) {
-        console.error('Error fetching grades:', error);
-        res.status(500).json({ success: false, message: 'Internal Server Error' });
+    if (!board) {
+      return res.status(400).json({ success: false, message: "Board is required" });
     }
+
+    const query = { board };
+    if (medium) {
+      query.medium = medium;
+    }
+
+    const grades = await Subject.find(query).distinct('grade');
+
+    res.status(200).json({
+      success: true,
+      data: grades
+    });
+  } catch (error) {
+    console.error('Error fetching grades:', error);
+    res.status(500).json({ success: false, message: 'Internal Server Error' });
+  }
 });
 
 export const getMediumsForBoard = asyncHandler(async (req, res) => {

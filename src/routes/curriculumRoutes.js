@@ -26,6 +26,6 @@ router.get('/subject/:subjectName', getCurriculumBySubjectName);
 //router.post('/postCurriculumForm', postCurriculumForm);
 
 // Change from GET to POST and update the path
-router.post('/subject', protect, getCurriculumBySubjectName);
+router.post('/subject', getCurriculumBySubjectName);
 
 export default router;
