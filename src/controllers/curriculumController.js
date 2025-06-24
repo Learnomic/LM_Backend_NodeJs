@@ -477,39 +477,45 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
             });
         }
 
-        // Create base query without medium
         const subjectQuery = {
             subject: subjectName,
             board,
             grade
         };
 
-        // Add medium to query if provided
         if (medium) {
             subjectQuery.medium = medium;
         }
 
-        // Get all data in parallel
-        const [subject, allChapters, allTopics, allSubtopics, allVideos] = await Promise.all([
-            Subject.findOne(subjectQuery).lean(),
-            Chapter.find({ subject: subjectName }).lean(),
+        // Get the subject first
+        const subject = await Subject.findOne(subjectQuery).lean();
+        if (!subject) {
+            return res.status(404).json({ 
+                success: false,
+                message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`,
+                query: subjectQuery
+            });
+        }
+
+        // Filter chapters by subject, board, grade, (optional) medium
+        const chapterQuery = {
+            subject: subjectName,
+            board,
+            $or: [{ grade }, { grade: grade.toString() }]
+        };
+        if (medium) chapterQuery.medium = medium;
+
+        const [chapters, topics, subtopics, videos] = await Promise.all([
+            Chapter.find(chapterQuery).lean(),
             Topic.find().lean(),
             Subtopic.find({ subName: subjectName }).lean(),
             Video.find({ subName: subjectName }).lean()
         ]);
 
-        if (!subject) {
-            return res.status(404).json({ 
-                success: false,
-                message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`,
-                query: subjectQuery // Include the actual query used for debugging
-            });
-        }
+        // Build the structured curriculum
+        const curriculum = buildCurriculumFast(subject, chapters, topics, subtopics, videos);
 
-        // Build curriculum using optimized approach
-        const curriculum = buildCurriculumFast(subject, allChapters, allTopics, allSubtopics, allVideos);
-
-        // Cache the result
+        // Cache it
         setCache(cacheKey, curriculum);
 
         res.status(200).json({
