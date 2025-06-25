@@ -207,6 +207,8 @@ export const getGradesForBoard = asyncHandler(async (req, res) => {
 
     const grades = await Subject.find(query).distinct('grade');
 
+    grades.sort((a, b) => Number(a) - Number(b));
+    
     res.status(200).json({
       success: true,
       data: grades
