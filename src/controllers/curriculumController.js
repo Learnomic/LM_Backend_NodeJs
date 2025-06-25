@@ -257,23 +257,35 @@ export const getMediumsForBoard = asyncHandler(async (req, res) => {
 export const getChapters = asyncHandler(async (req, res) => {
     try {
         const { subjectName } = req.params;
-        const cacheKey = getCacheKey('chapters', subjectName);
-        
+        const { board, grade } = req.query;
+
+        const cacheKey = getCacheKey('chapters', subjectName, board || 'any', grade || 'any');
+
         // Check cache first
         const cached = getCache(cacheKey);
         if (cached) {
             return res.json(cached);
         }
-        
-        const chapters = await Chapter.find({ subject: subjectName })
-            .select('chapterName subject')
+
+        // Build dynamic query
+        const chapterQuery = { subject: subjectName };
+        if (board) chapterQuery.board = board;
+        if (grade) {
+            chapterQuery.$or = [
+                { grade: grade },
+                { grade: grade.toString() }
+            ];
+        }
+
+        const chapters = await Chapter.find(chapterQuery)
+            .select('chapterName subject board grade')
             .lean()
             .exec();
-        
+
         if (chapters.length === 0) {
-            return res.status(404).json({ message: 'No chapters found for this subject' });
+            return res.status(404).json({ message: 'No chapters found for this subject, board, and grade' });
         }
-        
+
         // Cache the result
         setCache(cacheKey, chapters);
         res.json(chapters);
@@ -282,6 +294,7 @@ export const getChapters = asyncHandler(async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // @desc    Get topics for a specific chapter (OPTIMIZED)
 // @route   GET /api/topics/:chapterId
