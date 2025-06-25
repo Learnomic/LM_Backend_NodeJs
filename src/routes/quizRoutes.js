@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post('/submit_quiz', protect, submitQuiz);
 router.get('/user/quiz_history', protect, getUserQuizHistory);
-router.get('/quiz', getQuizByVideoUrl);
+router.get('/', getQuizByVideoUrl);
 
 
 export default router;
