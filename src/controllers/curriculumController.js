@@ -518,7 +518,10 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
             board,
             $or: [{ grade }, { grade: grade.toString() }]
         };
-        if (medium) chapterQuery.medium = medium;
+        
+if (medium !== undefined && medium !== '') {
+  chapterQuery.medium = medium;
+}
 
         const [chapters, topics, subtopics, videos] = await Promise.all([
             Chapter.find(chapterQuery).lean(),
