@@ -1,10 +1,6 @@
 import mongoose from 'mongoose';
 
 const questionPaperSchema = new mongoose.Schema({
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    required: true
-  },
   subject: String,
   grade: String,
   medium: String,
@@ -18,14 +14,10 @@ const questionPaperSchema = new mongoose.Schema({
         c: String,
         d: String
       },
-      correctAnswer: String
+      correctAnswer: String,
+      explanation: String
     }
   ],
-  userAnswers: [String],
-  score: {
-    type: Number,
-    default: 0
-  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -33,4 +25,5 @@ const questionPaperSchema = new mongoose.Schema({
 });
 
 const QuestionPaper = mongoose.model('QuestionPaper', questionPaperSchema);
+
 export default QuestionPaper;
