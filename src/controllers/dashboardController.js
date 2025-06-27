@@ -9,6 +9,7 @@ import Topic from '../models/Topic.js';
 import Subtopic from '../models/Subtopic.js';
 import Video from '../models/Video.js';
 import QuestionPaper from '../models/QuestPaperSchema.js';
+import QuestPaperScore from '../models/QuestPaperScoreSchema.js';
 
 // Define achievement thresholds (Example - adjust based on your requirements)
 const ACHIEVEMENT_THRESHOLDS = {
@@ -24,13 +25,13 @@ const ACHIEVEMENT_THRESHOLDS = {
 export const getUserDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
-const questionPapers = await QuestionPaper.find({ userId }).limit(5).lean(); // No .sort()
+const questionPapers = await QuestPaperScore.find({ userId }).sort({ createdAt: -1 }).limit(5).lean();
 
 const questionPaperScores = questionPapers.map(paper => ({
   id: paper._id,
-  subject: paper.subject,
+  subject: paper.subjectName,
   score: paper.score,
-  totalQuestions: paper.questions.length,
+  totalQuestions: paper.totalQuestions,
   date: paper.createdAt
 }));
 
