@@ -1,6 +1,7 @@
 import Quiz from '../models/Quiz.js';
 import QuestionPaper from '../models/QuestPaperSchema.js';
 import Video from '../models/Video.js';
+import QuestPaperScore from '../models/QuestPaperScoreSchema.js';
 
 function shuffleArray(arr) {
   return arr.sort(() => Math.random() - 0.5);
@@ -11,15 +12,21 @@ export const generateQuestionPaper = async (req, res) => {
   try {
     const { subName, board, grade, medium } = req.body;
     const userId = req.user._id;
+    console.log("Payload received:", { userId });
+    
 
     if (!subName || !board || !grade || !userId) {
       return res.status(400).json({ message: 'subName, board, grade are required, and user must be authenticated' });
     }
 
-    const query = { subName, board, grade };
-    if (medium && medium.trim() !== '') {
-      query.medium = medium;
-    }
+const query = {
+  subName: new RegExp(`^${subName}$`, 'i'),
+  board: new RegExp(`^${board}$`, 'i'),
+  grade: new RegExp(`^${grade}$`, 'i')
+};
+if (medium && medium.trim() !== '') {
+  query.medium = new RegExp(`^${medium}$`, 'i');
+}
 
     const quizzes = await Quiz.find(query);
 
@@ -49,8 +56,6 @@ export const generateQuestionPaper = async (req, res) => {
       board,
       medium: medium?.trim() || undefined,
       questions: shuffled,
-      userAnswers: [],
-      score: 0
     });
 
     await paper.save();
@@ -62,31 +67,54 @@ export const generateQuestionPaper = async (req, res) => {
   }
 };
 
-// Submit Question Paper
-export const submitQuestionPaper = async (req, res) => {
+export const submitQuestionPaperScore = async (req, res) => {
   try {
-    const { paperId, answers } = req.body;
     const userId = req.user._id;
+    const { paperId, answers, timeSpent } = req.body;
+
+    console.log('Payload received:', { paperId, answers, timeSpent });
+
+    if (!paperId || !Array.isArray(answers)) {
+      return res.status(400).json({ message: 'paperId and answers are required' });
+    }
 
     const paper = await QuestionPaper.findById(paperId);
-    if (!paper)
+    console.log('Fetched paper:', paper);
+
+    if (!paper) {
       return res.status(404).json({ message: 'Question paper not found' });
+    }
 
-    if (answers.length !== paper.questions.length)
-      return res.status(400).json({ message: 'All questions must be answered' });
-
-    let score = 0;
-    paper.questions.forEach((q, i) => {
-      if (q.correctAnswer === answers[i]) score++;
+    const evaluatedAnswers = answers.map(({ questionIndex, selectedOption }) => {
+      const actualQuestion = paper.questions[questionIndex];
+      if (!actualQuestion) {
+        throw new Error(`Invalid questionIndex ${questionIndex}`);
+      }
+      const isCorrect = actualQuestion.correctAnswer === selectedOption;
+      return {
+        questionIndex,
+        selectedOption,
+        isCorrect
+      };
     });
 
-    paper.userAnswers = answers;
-    paper.score = score;
+    const correctAnswers = evaluatedAnswers.filter(ans => ans.isCorrect).length;
 
-    await paper.save();
-    res.status(200).json({ message: 'Answers submitted', score, total: paper.questions.length });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: 'Failed to submit answers' });
+    const resultDoc = new QuestPaperScore({
+      userId,
+      subjectName: paper.subject,
+      totalQuestions: paper.questions.length,
+      correctAnswers,
+      score: correctAnswers,
+      timeSpent: timeSpent || 0,
+      answers: evaluatedAnswers
+    });
+
+    await resultDoc.save();
+
+    res.status(201).json({ message: 'Score submitted successfully', data: resultDoc });
+  } catch (error) {
+    console.error('Error in submitQuestionPaperScore:', error);
+    res.status(500).json({ message: 'Failed to submit score', error: error.message });
   }
 };
