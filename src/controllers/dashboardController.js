@@ -8,6 +8,7 @@ import Chapter from '../models/Chapter.js';
 import Topic from '../models/Topic.js';
 import Subtopic from '../models/Subtopic.js';
 import Video from '../models/Video.js';
+import QuestionPaper from '../models/QuestPaperSchema.js';
 
 // Define achievement thresholds (Example - adjust based on your requirements)
 const ACHIEVEMENT_THRESHOLDS = {
@@ -22,6 +23,16 @@ const ACHIEVEMENT_THRESHOLDS = {
 // Get complete dashboard data
 export const getUserDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
+
+const questionPapers = await QuestionPaper.find({ userId }).limit(5).lean(); // No .sort()
+
+const questionPaperScores = questionPapers.map(paper => ({
+  id: paper._id,
+  subject: paper.subject,
+  score: paper.score,
+  totalQuestions: paper.questions.length,
+  date: paper.createdAt
+}));
 
     try {
         console.log('Fetching dashboard data for user:', userId);
@@ -52,11 +63,6 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             console.error('Error in Promise.all:', error);
             throw error;
         });
-
-        console.log('Successfully fetched initial data');
-        console.log('Quiz scores current user count:', quizScoresCurrentUser.length);
-        console.log('Subject progress count:', subjectProgress.length);
-        console.log('User found:', !!user);
 
         // Sort quiz scores in JavaScript instead of MongoDB
         const sortedQuizScores = quizScoresCurrentUser.sort((a, b) => 
@@ -278,15 +284,6 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             };
         });
 
-        // Format fun facts
-        const formattedFunFacts = [
-            { id: 1, text: "Did you know? The average human attention span is shorter than a goldfish's! Keep practicing!", category: "General", icon: "💡" },
-            { id: 2, text: "Solving quizzes boosts your brainpower by making new connections!", category: "Learning", icon: "🧠" },
-            { id: 3, text: "Regular practice, even short sessions, is more effective than cramming.", category: "Study Tips", icon: "📚" },
-            { id: 4, text: "Teaching others is a great way to solidify your own understanding.", category: "Study Tips", icon: "🤝" },
-            { id: 5, text: "Challenge yourself with topics you find difficult – that's where the biggest growth happens!", category: "Motivation", icon: "💪" }
-        ];
-
         // Format subject progress
         const formattedSubjectProgress = subjectProgress.map(sp => ({
             subjectId: sp._id,
@@ -304,10 +301,11 @@ export const getUserDashboard = asyncHandler(async (req, res) => {
             completedVideos,
             totalQuizzes,
             achievements: achievementsWithProgress,
-            funFacts: formattedFunFacts,
+            // funFacts: formattedFunFacts,
             chartData,
             subjectProgress: formattedSubjectProgress,
             recentQuizHistory,
+            questionPaperScores,
             userStats: {
                 totalTimeSpent: Math.round(totalTimeSpent * 100) / 100,
                 currentStreak: currentStreak,
@@ -553,29 +551,29 @@ export const getUserAchievements = asyncHandler(async (req, res) => {
     }
 });
 
-export const getFunFacts = asyncHandler(async (req, res) => {
-    try {
-        const user = await User.findById(req.user._id);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+// export const getFunFacts = asyncHandler(async (req, res) => {
+//     try {
+//         const user = await User.findById(req.user._id);
+//         if (!user) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: 'User not found'
+//             });
+//         }
 
-        const funFacts = await generateFunFacts(user);
-        res.status(200).json({
-            success: true,
-            data: { funFacts }
-        });
-    } catch (error) {
-        res.status(500).json({
-            success: false,
-            message: 'Failed to fetch fun facts',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
+//         const funFacts = await generateFunFacts(user);
+//         res.status(200).json({
+//             success: true,
+//             data: { funFacts }
+//         });
+//     } catch (error) {
+//         res.status(500).json({
+//             success: false,
+//             message: 'Failed to fetch fun facts',
+//             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//         });
+//     }
+// });
 
 export const getUserProgress = asyncHandler(async (req, res) => {
     try {
@@ -683,31 +681,32 @@ const calculatePercentile = (user) => {
     return Math.floor(Math.random() * 30) + 70; // Returns 70-99
 };
 
-const generateFunFacts = async (user) => {
-    try {
-        const quizHistory = await QuizScore.find({ user: user._id }).lean();
-        const totalMinutes = Math.round((user.totalTimeSpent || 0) / 60);
-        const totalQuizzes = quizHistory.length;
-        const averageScore = totalQuizzes > 0 
-            ? Math.round(quizHistory.reduce((sum, q) => sum + (q.score || 0), 0) / totalQuizzes)
-            : 0;
+// const generateFunFacts = async (user) => {
+//     try {
+//         const quizHistory = await QuizScore.find({ user: user._id }).lean();
+//         const totalMinutes = Math.round((user.totalTimeSpent || 0) / 60);
+//         const totalQuizzes = quizHistory.length;
+//         const averageScore = totalQuizzes > 0 
+//             ? Math.round(quizHistory.reduce((sum, q) => sum + (q.score || 0), 0) / totalQuizzes)
+//             : 0;
 
-        return [
-            `You've spent ${totalMinutes} minutes learning - that's dedication!`,
-            `You're in the top ${calculatePercentile(user)}% of active learners`,
-            `You've mastered ${user.masteredTopics?.length || 0} topics so far`,
-            `Your average quiz score is ${averageScore}% - keep it up!`,
-            `You've completed ${totalQuizzes} quizzes on your learning journey`
-        ];
-    } catch (error) {
-        console.error('Error generating fun facts:', error);
-        return [
-            "You're making great progress on your learning journey!",
-            "Every quiz completed is a step towards mastery",
-            "Keep up the excellent work!"
-        ];
-    }
-};
+//         return [
+//             `You've spent ${totalMinutes} minutes learning - that's dedication!`,
+//             `You're in the top ${calculatePercentile(user)}% of active learners`,
+//             `You've mastered ${user.masteredTopics?.length || 0} topics so far`,
+//             `Your average quiz score is ${averageScore}% - keep it up!`,
+//             `You've completed ${totalQuizzes} quizzes on your learning journey`
+//         ];
+//     } catch (error) {
+//         console.error('Error generating fun facts:', error);
+//         return [
+//             "You're making great progress on your learning journey!",
+//             "Every quiz completed is a step towards mastery",
+//             "Keep up the excellent work!"
+//         ];
+//     }
+// };
+
 
 // Admin Placeholder functions
 export const postCurriculum = asyncHandler(async (req, res) => {

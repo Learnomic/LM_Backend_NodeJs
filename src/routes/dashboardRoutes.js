@@ -3,7 +3,7 @@ import {
     getUserDashboard,
     getUserStreak,
     getUserAchievements,
-    getFunFacts,
+    // getFunFacts,
     getUserProgress,
     getSubjectProgress,
     getContinueLearning
@@ -19,7 +19,7 @@ router.use(protect);
 router.get('/', getUserDashboard);
 router.get('/streak', getUserStreak);
 router.get('/achievements', getUserAchievements);
-router.get('/fun-facts', getFunFacts);
+// router.get('/fun-facts', getFunFacts);
 router.get('/progress', getUserProgress);
 router.get('/subject-progress', getSubjectProgress);
 router.get('/continue-learning', getContinueLearning);
