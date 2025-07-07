@@ -10,7 +10,22 @@ const chapterSchema = new mongoose.Schema({
         type: String,
         required: true,
         trim: true
-    }
+    },
+    board: {
+        type: String,
+        required: true,
+        trim: true
+    },
+    grade: {
+        type: String,
+        required: true,
+        trim: true
+    },
+medium: {
+  type: [String], // Array of strings
+  required: false,
+  default: []
+}
 }, {
     collection: 'Chapters',
     timestamps: true

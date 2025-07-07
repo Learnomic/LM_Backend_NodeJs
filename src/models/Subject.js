@@ -16,11 +16,12 @@ const subjectSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-    medium: {
-        type: String,
-        required: false,
-        trim: true
-    }
+medium: {
+  type: [String], // Array of strings
+  required: false,
+  default: []
+}
+
 }, {
     timestamps: true,
     collection: 'Subjects' // Collection names start with capital letters

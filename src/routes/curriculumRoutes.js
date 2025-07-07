@@ -3,6 +3,7 @@ const router = express.Router();
 import { postSubjects, getChapters, getTopics, getSubtopics, getVideos, getQuiz, getCompleteContent, getCurriculumBySubjectName, addVideo, getVideoById, 
     getAvailableBoardsAndGrades, getGradesForBoard, getMediumsForBoard} from '../controllers/curriculumController.js';
 import protect from '../middleware/authMiddleware.js'; // Assuming curriculum content access requires authentication
+import Subject from '../models/Subject.js';
 
 router.get('/available-options', getAvailableBoardsAndGrades);
 router.get('/grades/:board', getGradesForBoard);

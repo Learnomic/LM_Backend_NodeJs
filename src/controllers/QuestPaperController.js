@@ -10,6 +10,10 @@ function shuffleArray(arr) {
 // Generate Question Paper
 export const generateQuestionPaper = async (req, res) => {
   try {
+    if (!req.user || !req.user._id) {
+      return res.status(401).json({ message: 'Unauthorized: user not authenticated' });
+    }
+
     const { subName, board, grade, medium } = req.body;
     const userId = req.user._id;
     console.log("Payload received:", { userId });
@@ -69,6 +73,10 @@ if (medium && medium.trim() !== '') {
 
 export const submitQuestionPaperScore = async (req, res) => {
   try {
+if (!req.user || !req.user._id) {
+  return res.status(401).json({ message: 'Unauthorized: user not authenticated' });
+}
+
     const userId = req.user._id;
     const { paperId, answers, timeSpent } = req.body;
 

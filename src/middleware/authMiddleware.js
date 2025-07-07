@@ -14,9 +14,15 @@ const protect = asyncHandler(async (req, res, next) => {
       token = req.headers.authorization.split(" ")[1];
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-      req.user = await User.findById(decoded.id).select("-password");
+      const user = await User.findById(decoded.id).select("-password");
 
-      return next(); // <== early return here if token is valid
+      if (!user) {
+        res.status(401);
+        throw new Error("Not authorized, user not found");
+      }
+
+      req.user = user;
+      return next();
     } catch (error) {
       console.error("JWT Error:", error.message);
       res.status(401);
@@ -24,11 +30,9 @@ const protect = asyncHandler(async (req, res, next) => {
     }
   }
 
-  // Move this block *outside* the if condition
-  if (!token) {
-    res.status(401);
-    throw new Error("Not authorized, no token");
-  }
+  // Move this block outside the if to catch missing token
+  res.status(401);
+  throw new Error("Not authorized, no token");
 });
 
 export default protect;
