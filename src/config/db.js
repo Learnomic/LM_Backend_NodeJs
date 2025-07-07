@@ -7,7 +7,6 @@ dotenv.config();
 const connectDB = async () => {
   try {
     const conn = await mongoose.connect(process.env.MONGODB_URI, {
-      dbName: 'learnomic', // Explicitly specify the database name
       retryWrites: false
     });
 

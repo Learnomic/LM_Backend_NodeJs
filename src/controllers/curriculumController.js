@@ -128,7 +128,7 @@ function buildCompleteContentFast(subject, allChapters, allTopics, allSubtopics,
 
 export const postSubjects = asyncHandler(async (req, res) => {
     try {
-        const { board, grade, subject, medium } = req.body; // Add medium to destructuring
+        const { board, grade, subject, medium } = req.body;
         const cacheKey = getCacheKey('subjects', board || 'all', grade || 'all', subject || 'all', medium || 'all');
 
         // Check cache
@@ -146,11 +146,20 @@ export const postSubjects = asyncHandler(async (req, res) => {
             ];
         }
         if (subject) query.subject = subject;
-        if (medium) query.medium = medium; // Add medium to query
+        
+        // FIXED: Handle medium properly - medium field is an array in database
+        if (medium) {
+            // If medium is provided, find subjects that have this medium in their medium array
+            query.medium = { $in: [medium] };
+        }
+
+        console.log('Query for subjects:', query);
 
         const subjects = await Subject.find(query)
-            .select('subject board grade medium') // Include medium in the select
+            .select('subject board grade medium')
             .lean();
+
+        console.log('Found subjects:', subjects);
 
         if (!subjects || subjects.length === 0) {
             return res.status(404).json({
@@ -201,8 +210,10 @@ export const getGradesForBoard = asyncHandler(async (req, res) => {
     }
 
     const query = { board };
+    
+    // FIXED: Handle medium properly - medium field is an array in database
     if (medium) {
-      query.medium = medium;
+        query.medium = { $in: [medium] };
     }
 
     const grades = await Subject.find(query).distinct('grade');
@@ -218,6 +229,7 @@ export const getGradesForBoard = asyncHandler(async (req, res) => {
     res.status(500).json({ success: false, message: 'Internal Server Error' });
   }
 });
+
 
 export const getMediumsForBoard = asyncHandler(async (req, res) => {
     try {
@@ -491,37 +503,78 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
                 data: cached
             });
         }
-
-        const subjectQuery = {
+        // Base query for subject
+        const baseQuery = {
             subject: subjectName,
             board,
             grade
         };
 
+        let subject = null;
+        let queryUsed = '';
+
         if (medium) {
-            subjectQuery.medium = medium;
+            // Try with $in operator for array field
+            const queryWithIn = {
+                ...baseQuery,
+                medium: { $in: [medium] }
+            };
+            console.log('Trying query with $in:', queryWithIn);
+            
+            subject = await Subject.findOne(queryWithIn).lean();
+            console.log('Result with $in:', subject);
+            
+            if (subject) {
+                queryUsed = 'with $in';
+            }
         }
 
-        // Get the subject first
-        const subject = await Subject.findOne(subjectQuery).lean();
+        // If no subject found with medium, try without medium
+        if (!subject) {
+            console.log('Trying without medium:', baseQuery);
+            subject = await Subject.findOne(baseQuery).lean();
+            console.log('Result without medium:', subject);
+            
+            if (subject) {
+                // Check if the medium exists in the subject's medium array
+                if (medium && subject.medium && Array.isArray(subject.medium)) {
+                    const mediumExists = subject.medium.includes(medium);
+                    console.log(`Medium ${medium} exists in subject:`, mediumExists);
+                    
+                    if (!mediumExists) {
+                        subject = null; // Don't use this subject if medium doesn't match
+                    } else {
+                        queryUsed = 'without medium filter, verified manually';
+                    }
+                } else {
+                    queryUsed = 'without medium';
+                }
+            }
+        }
+
+        console.log('Final subject found:', subject);
+        console.log('Query approach used:', queryUsed);
+
         if (!subject) {
             return res.status(404).json({ 
                 success: false,
-                message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`,
-                query: subjectQuery
+                message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`
             });
         }
 
-        // Filter chapters by subject, board, grade, (optional) medium
+        // Continue with chapter query
         const chapterQuery = {
             subject: subjectName,
             board,
             $or: [{ grade }, { grade: grade.toString() }]
         };
         
-if (medium !== undefined && medium !== '') {
-  chapterQuery.medium = medium;
-}
+        // Apply medium filter to chapters if needed
+        if (medium && queryUsed.includes('$in')) {
+            chapterQuery.medium = { $in: [medium] };
+        }
+
+        console.log('Chapter query:', chapterQuery);
 
         const [chapters, topics, subtopics, videos] = await Promise.all([
             Chapter.find(chapterQuery).lean(),
@@ -529,6 +582,8 @@ if (medium !== undefined && medium !== '') {
             Subtopic.find({ subName: subjectName }).lean(),
             Video.find({ subName: subjectName }).lean()
         ]);
+
+        console.log('Chapters found:', chapters.length);
 
         // Build the structured curriculum
         const curriculum = buildCurriculumFast(subject, chapters, topics, subtopics, videos);
@@ -538,7 +593,14 @@ if (medium !== undefined && medium !== '') {
 
         res.status(200).json({
             success: true,
-            data: curriculum
+            data: curriculum,
+            debug: {
+                queryUsed,
+                chaptersFound: chapters.length,
+                topicsFound: topics.length,
+                subtopicsFound: subtopics.length,
+                videosFound: videos.length
+            }
         });
 
     } catch (error) {
@@ -546,8 +608,7 @@ if (medium !== undefined && medium !== '') {
         res.status(500).json({
             success: false,
             message: 'Failed to fetch curriculum',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error',
-            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
 });
