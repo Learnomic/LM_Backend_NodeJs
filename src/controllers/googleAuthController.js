@@ -13,6 +13,24 @@ const generateToken = (id) => {
     });
 };
 
+const optimizeGoogleProfilePicture = (originalUrl) => {
+    if (!originalUrl) return null;
+    
+    // If it's a Google profile picture URL
+    if (originalUrl.includes('googleusercontent.com')) {
+        try {
+            // Remove size parameter and add a more reliable one
+            const baseUrl = originalUrl.split('=')[0];
+            return `${baseUrl}=s96-c-rw`; // rw = read-write, more reliable
+        } catch (error) {
+            console.log('Error optimizing Google profile picture URL:', error);
+            return originalUrl;
+        }
+    }
+    
+    return originalUrl;
+};
+
 // Google Sign In
 export const googleSignIn = asyncHandler(async (req, res) => {
     try {
@@ -41,6 +59,9 @@ export const googleSignIn = asyncHandler(async (req, res) => {
             });
         }
 
+        // Optimize the profile picture URL
+        const optimizedPicture = optimizeGoogleProfilePicture(picture);
+
         // Check if user exists by email or googleId
         let user = await User.findOne({ 
             $or: [
@@ -54,14 +75,14 @@ export const googleSignIn = asyncHandler(async (req, res) => {
             user = new User({
                 name: name || 'Google User',
                 email: email,
-                profilePicture: picture || '',
+                profilePicture: optimizedPicture || '',
                 googleId: googleId,
                 isGoogleUser: true,
                 isVerified: true // Google accounts are pre-verified
             });
             
             await user.save();
-            console.log(`New Google user created in learnomic.Users: ${email}`);
+            console.log(`New Google user created: ${email}`);
         } else {
             // Update existing user to link Google account if not already linked
             let userUpdated = false;
@@ -81,14 +102,15 @@ export const googleSignIn = asyncHandler(async (req, res) => {
                 userUpdated = true;
             }
             
-            if (!user.profilePicture && picture) {
-                user.profilePicture = picture;
+            // Update profile picture if it's different or if user doesn't have one
+            if (optimizedPicture && (!user.profilePicture || user.profilePicture !== optimizedPicture)) {
+                user.profilePicture = optimizedPicture;
                 userUpdated = true;
             }
             
             if (userUpdated) {
                 await user.save();
-                console.log(`Existing user updated with Google info in learnomic.Users: ${email}`);
+                console.log(`Existing user updated with Google info: ${email}`);
             }
         }
 
@@ -104,12 +126,14 @@ export const googleSignIn = asyncHandler(async (req, res) => {
                 email: user.email,
                 profilePicture: user.profilePicture,
                 isGoogleUser: user.isGoogleUser,
-                isVerified: user.isVerified
+                isVerified: user.isVerified,
+                board: user.board,
+                grade: user.grade
             },
             token: authToken
         });
 
-    } catch (error) {
+    } catch (error) {        
         console.error('Google Sign In Error:', error);
         
         // Handle specific Google token errors
@@ -124,6 +148,54 @@ export const googleSignIn = asyncHandler(async (req, res) => {
         res.status(500).json({ 
             success: false, 
             message: 'Error during Google sign in',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+
+// Optional: Add a function to refresh profile pictures for existing users
+export const refreshProfilePicture = asyncHandler(async (req, res) => {
+    try {
+        const userId = req.user._id;
+        const user = await User.findById(userId);
+        
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        // If user has a Google profile picture, try to refresh it
+        if (user.isGoogleUser && user.profilePicture) {
+            const optimizedPicture = optimizeGoogleProfilePicture(user.profilePicture);
+            if (optimizedPicture !== user.profilePicture) {
+                user.profilePicture = optimizedPicture;
+                await user.save();
+            }
+        }
+
+        res.status(200).json({
+            success: true,
+            message: 'Profile picture refreshed',
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profilePicture: user.profilePicture,
+                isGoogleUser: user.isGoogleUser,
+                isVerified: user.isVerified,
+                board: user.board,
+                grade: user.grade
+            }
+        });
+
+    } catch (error) {
+        console.error('Refresh Profile Picture Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error refreshing profile picture',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }
@@ -175,7 +247,9 @@ export const signIn = asyncHandler(async (req, res) => {
                 email: user.email,
                 profilePicture: user.profilePicture,
                 isGoogleUser: user.isGoogleUser,
-                isVerified: user.isVerified
+                isVerified: user.isVerified,
+                board: user.board,
+                grade: user.grade
             },
             token: generateToken(user._id)
         });
@@ -185,6 +259,63 @@ export const signIn = asyncHandler(async (req, res) => {
         res.status(500).json({
             success: false,
             message: 'Error during sign in',
+            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+        });
+    }
+});
+
+// Complete Google User Profile (for users who need to add board/grade)
+export const completeGoogleProfile = asyncHandler(async (req, res) => {
+    try {
+        const { board, grade, school, div, pincode } = req.body;
+        const userId = req.user._id; // Assuming you have auth middleware
+
+        if (!board || !grade) {
+            return res.status(400).json({
+                success: false,
+                message: 'Board and grade are required'
+            });
+        }
+
+        const user = await User.findById(userId);
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: 'User not found'
+            });
+        }
+
+        user.board = board;
+        user.grade = grade;
+        if (school) user.school = school;
+        if (div) user.div = div;
+        if (pincode) user.pincode = pincode;
+
+        await user.save();
+
+        res.status(200).json({
+            success: true,
+            message: 'Profile completed successfully',
+            user: {
+                _id: user._id,
+                name: user.name,
+                email: user.email,
+                profilePicture: user.profilePicture,
+                isGoogleUser: user.isGoogleUser,
+                isVerified: user.isVerified,
+                board: user.board,
+                grade: user.grade,
+                school: user.school,
+                div: user.div,
+                pincode: user.pincode
+            }
+        });
+
+    } catch (error) {
+        console.error('Complete Profile Error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Error completing profile',
             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
         });
     }

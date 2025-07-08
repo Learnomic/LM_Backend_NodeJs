@@ -1,9 +1,11 @@
 import express from 'express';
-import { googleSignIn, signIn } from '../controllers/googleAuthController.js';
+import { googleSignIn, signIn, completeGoogleProfile } from '../controllers/googleAuthController.js';
+import protect from '../middleware/authMiddleware.js'; // Assuming you have auth middleware
 
 const router = express.Router();
 
 router.post('/google-signin', googleSignIn);
 router.post('/signin', signIn);
+router.post('/complete-profile', protect, completeGoogleProfile);
 
 export default router;
