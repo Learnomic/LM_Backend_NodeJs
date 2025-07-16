@@ -202,67 +202,67 @@ export const refreshProfilePicture = asyncHandler(async (req, res) => {
 });
 
 // Regular Sign In
-export const signIn = asyncHandler(async (req, res) => {
-    try {
-        const { email, password } = req.body;
+// export const signIn = asyncHandler(async (req, res) => {
+//     try {
+//         const { email, password } = req.body;
 
-        if (!email || !password) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email and password are required'
-            });
-        }
+//         if (!email || !password) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'Email and password are required'
+//             });
+//         }
 
-        const user = await User.findOne({ email });
+//         const user = await User.findOne({ email });
 
-        if (!user) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
+//         if (!user) {
+//             return res.status(401).json({
+//                 success: false,
+//                 message: 'Invalid email or password'
+//             });
+//         }
 
-        if (user.isGoogleUser && !user.password) {
-            return res.status(400).json({
-                success: false,
-                message: 'This account uses Google Sign-In. Please sign in with Google.'
-            });
-        }
+//         if (user.isGoogleUser && !user.password) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'This account uses Google Sign-In. Please sign in with Google.'
+//             });
+//         }
 
-        const isPasswordMatch = await user.matchPassword(password);
+//         const isPasswordMatch = await user.matchPassword(password);
 
-        if (!isPasswordMatch) {
-            return res.status(401).json({
-                success: false,
-                message: 'Invalid email or password'
-            });
-        }
+//         if (!isPasswordMatch) {
+//             return res.status(401).json({
+//                 success: false,
+//                 message: 'Invalid email or password'
+//             });
+//         }
 
-        res.status(200).json({
-            success: true,
-            message: 'Sign in successful',
-            user: {
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                profilePicture: user.profilePicture,
-                isGoogleUser: user.isGoogleUser,
-                isVerified: user.isVerified,
-                board: user.board,
-                grade: user.grade
-            },
-            token: generateToken(user._id)
-        });
+//         res.status(200).json({
+//             success: true,
+//             message: 'Sign in successful',
+//             user: {
+//                 _id: user._id,
+//                 name: user.name,
+//                 email: user.email,
+//                 profilePicture: user.profilePicture,
+//                 isGoogleUser: user.isGoogleUser,
+//                 isVerified: user.isVerified,
+//                 board: user.board,
+//                 grade: user.grade
+//             },
+//             token: generateToken(user._id)
+//         });
 
-    } catch (error) {
-        console.error('Sign In Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error during sign in',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
+//     } catch (error) {
+//         console.error('Sign In Error:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Error during sign in',
+//             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//         });
+//     }
+// });
 
 // Complete Google User Profile (for users who need to add board/grade)
 export const completeGoogleProfile = asyncHandler(async (req, res) => {
