@@ -3,7 +3,11 @@ import mongoose from 'mongoose';
 const questionPaperSchema = new mongoose.Schema({
   subject: String,
   grade: String,
-  medium: String,
+medium: {
+  type: [String], // Array of strings
+  required: false,
+  default: undefined
+},  
   board: String,
   questions: [
     {

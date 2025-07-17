@@ -13,7 +13,7 @@ import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
 import questionPaperRoute from './src/routes/QuestPaperRoute.js';
 import quizRoutes from './src/routes/quizRoutes.js';
-import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
+// import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
 
 // Connect to MongoDB
 connectDB();
@@ -28,7 +28,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-app.use('/api/googleauth', googleAuthRoutes);
+// app.use('/api/googleauth', googleAuthRoutes);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);

@@ -28,8 +28,9 @@ const query = {
   board: new RegExp(`^${board}$`, 'i'),
   grade: new RegExp(`^${grade}$`, 'i')
 };
+
 if (medium && medium.trim() !== '') {
-  query.medium = new RegExp(`^${medium}$`, 'i');
+  query.medium = { $in: [medium.trim()] };
 }
 
     const quizzes = await Quiz.find(query);

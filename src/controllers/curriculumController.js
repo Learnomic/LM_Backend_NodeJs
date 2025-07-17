@@ -184,8 +184,21 @@ export const postSubjects = asyncHandler(async (req, res) => {
 
 export const getAvailableBoardsAndGrades = asyncHandler(async (req, res) => {
     try {
-        const boards = await Subject.distinct('board');
-        const grades = await Subject.distinct('grade');
+        // Fetch all boards and grades from Subjects
+        const subjects = await Subject.find({}, { board: 1, grade: 1, _id: 0 });
+
+        // Extract unique boards and grades using Set
+        const boardsSet = new Set();
+        const gradesSet = new Set();
+
+        subjects.forEach(subject => {
+            if (subject.board) boardsSet.add(subject.board);
+            if (subject.grade) gradesSet.add(subject.grade);
+        });
+
+        // Convert Sets to Arrays
+        const boards = [...boardsSet];
+        const grades = [...gradesSet];
 
         res.status(200).json({
             success: true,
@@ -199,6 +212,7 @@ export const getAvailableBoardsAndGrades = asyncHandler(async (req, res) => {
         res.status(500).json({ success: false, message: 'Internal Server Error' });
     }
 });
+
 
 export const getGradesForBoard = asyncHandler(async (req, res) => {
   try {
