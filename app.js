@@ -13,7 +13,8 @@ import dashboardRoutes from './src/routes/dashboardRoutes.js';
 import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
 import questionPaperRoute from './src/routes/QuestPaperRoute.js';
 import quizRoutes from './src/routes/quizRoutes.js';
-// import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
+import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
+import './passport.js'; 
 
 // Connect to MongoDB
 connectDB();
@@ -49,8 +50,5 @@ app.get('/api/test', (req, res) => {
   res.send('API is working');
 });
 
-// mongoose.connect(process.env.MONGO_URI, { useNewUrlParser: true, useUnifiedTopology: true })
-//     .then(() => app.listen(PORT, () => console.log(`Server running on port ${PORT}`)))
-//     .catch(err => console.error(err));
 
 export default app;

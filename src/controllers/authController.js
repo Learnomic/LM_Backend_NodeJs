@@ -26,16 +26,64 @@ const transporter = nodemailer.createTransport({
 });
 
 // Verify transporter configuration
-transporter.verify(function(error, success) {
-    if (error) {
-        console.log('Email configuration error:', error);
-    } else {
-        console.log('Email server is ready to send messages');
-    }
-});
+// transporter.verify(function(error, success) {
+//     if (error) {
+//         console.log('Email configuration error:', error);
+//     } else {
+//         console.log('Email server is ready to send messages');
+//     }
+// });
 
 // Store reset tokens (in production, use Redis or database)
 const resetTokens = new Map();
+
+// export const register = async (req, res) => {
+//   const { name, email, password, board, grade } = req.body;
+
+//   if (!name || !email || !password || !board || !grade) {
+//     return res.status(400).json({ message: "Required fields are missing." });
+//   }
+
+//   try {
+//     // Check if email already exists in UserCredentials
+//     const existingUserCredential = await UserCredential.findOne({ email });
+//     if (existingUserCredential)
+//       return res.status(409).json({ message: "Email already exists." });
+
+//     // Create UserCredential
+//     const hashedPassword = await bcrypt.hash(password, 10);
+//     const newUserCredential = await UserCredential.create({
+//       email,
+//       password: hashedPassword,
+//     });
+
+//     // Create User, linking to UserCredential
+//     const newUser = await User.create({
+//       name,
+//       email,
+//       board,
+//       grade,
+//       credential_id: newUserCredential._id, // Link to the created UserCredential
+//     });
+
+//     // Generate token using the User's ID
+//     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
+
+//     res.status(201).json({ 
+//       token, 
+//       user: { 
+//         _id: newUser._id, // Include user ID in response
+//         name: newUser.name, 
+//         email: newUser.email, 
+//         board: newUser.board, 
+//         grade: newUser.grade 
+//       } 
+//     });
+//   } catch (error) {
+//     console.error('Registration error:', error);
+//     res.status(500).json({ message: "Server error", error: error.message });
+//   }
+// };
 
 export const register = async (req, res) => {
   const { name, email, password, board, grade } = req.body;
@@ -50,12 +98,19 @@ export const register = async (req, res) => {
     if (existingUserCredential)
       return res.status(409).json({ message: "Email already exists." });
 
-    // Create UserCredential
+    // Check if user already exists in Users collection
+    const existingUser = await User.findOne({ email });
+    if (existingUser)
+      return res.status(409).json({ message: "User already exists." });
+
+    // Create UserCredential first
     const hashedPassword = await bcrypt.hash(password, 10);
     const newUserCredential = await UserCredential.create({
       email,
       password: hashedPassword,
     });
+
+    console.log('Created UserCredential:', newUserCredential._id);
 
     // Create User, linking to UserCredential
     const newUser = await User.create({
@@ -63,8 +118,12 @@ export const register = async (req, res) => {
       email,
       board,
       grade,
-      credential_id: newUserCredential._id, // Link to the created UserCredential
+      credential_id: newUserCredential._id, // This is the key fix
+      isGoogleUser: false, // Explicitly set for regular users
+      isVerified: false
     });
+
+    console.log('Created User with credential_id:', newUser.credential_id);
 
     // Generate token using the User's ID
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
@@ -72,7 +131,7 @@ export const register = async (req, res) => {
     res.status(201).json({ 
       token, 
       user: { 
-        _id: newUser._id, // Include user ID in response
+        _id: newUser._id,
         name: newUser.name, 
         email: newUser.email, 
         board: newUser.board, 
@@ -81,6 +140,17 @@ export const register = async (req, res) => {
     });
   } catch (error) {
     console.error('Registration error:', error);
+    
+    // If User creation fails, clean up the UserCredential
+    if (error.message.includes('User validation failed') || error.message.includes('credential_id')) {
+      try {
+        await UserCredential.deleteOne({ email });
+        console.log('Cleaned up UserCredential after User creation failure');
+      } catch (cleanupError) {
+        console.error('Error cleaning up UserCredential:', cleanupError);
+      }
+    }
+    
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };

@@ -25,7 +25,10 @@ const ACHIEVEMENT_THRESHOLDS = {
 export const getUserDashboard = asyncHandler(async (req, res) => {
     const userId = req.user._id;
 
-const questionPapers = await QuestPaperScore.find({ userId }).sort({ createdAt: -1 }).limit(5).lean();
+const questionPapers = await QuestPaperScore
+  .find({ userId })
+  .limit(5)
+  .lean();
 
 const questionPaperScores = questionPapers.map(paper => ({
   id: paper._id,
