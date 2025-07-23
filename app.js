@@ -16,6 +16,8 @@ import quizRoutes from './src/routes/quizRoutes.js';
 import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
 import './passport.js'; 
 
+import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
+
 // Connect to MongoDB
 connectDB();
 
@@ -41,6 +43,8 @@ app.use('/api/quiz', (req, res, next) => {
   console.log(`Quiz route accessed: ${req.method} ${req.originalUrl}`);
   next();
 }, quizRoutes);
+
+app.use('/api/video-progress', videoProgressRoutes);
 
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
