@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from 'bcryptjs';
+import VideoProgressSchema from "./VideoProgressSchema.js";
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -85,55 +86,10 @@ const UserSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-  // ✅ UPDATED: Enhanced video progress tracking with time
-  videoProgress: [
-    {
-      videoId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'Video',
-        required: true
-      },
-      // Progress as percentage (0-100)
-      progressPercent: {
-        type: Number,
-        default: 0,
-        min: 0,
-        max: 100
-      },
-      // Current time position in seconds
-      currentTime: {
-        type: Number,
-        default: 0,
-        min: 0
-      },
-      // Total video duration in seconds (for reference)
-      totalDuration: {
-        type: Number,
-        default: 0,
-        min: 0
-      },
-      // When the video was last watched
-      lastWatched: {
-        type: Date,
-        default: Date.now
-      },
-      // Whether the video is completed
-      isCompleted: {
-        type: Boolean,
-        default: false
-      },
-      // How many times the video was watched
-      watchCount: {
-        type: Number,
-        default: 1
-      },
-      // Total time spent watching this video (in seconds)
-      totalWatchTime: {
-        type: Number,
-        default: 0
-      }
-    }
-  ]
+   videoProgress: {
+    type: [VideoProgressSchema],
+    default: [],
+  },
 }, {
   collection: 'Users',
   timestamps: true
