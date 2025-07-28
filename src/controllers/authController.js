@@ -2,10 +2,10 @@
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-import User from "../models/User.js"
-import UserCredential from "../models/UserCredential.js"
+import User from "../models/User.js";
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
+import { generateOTP } from '../utils/otpGenerator.js';
 
 dotenv.config();
 
@@ -25,65 +25,8 @@ const transporter = nodemailer.createTransport({
     }
 });
 
-// Verify transporter configuration
-// transporter.verify(function(error, success) {
-//     if (error) {
-//         console.log('Email configuration error:', error);
-//     } else {
-//         console.log('Email server is ready to send messages');
-//     }
-// });
-
 // Store reset tokens (in production, use Redis or database)
 const resetTokens = new Map();
-
-// export const register = async (req, res) => {
-//   const { name, email, password, board, grade } = req.body;
-
-//   if (!name || !email || !password || !board || !grade) {
-//     return res.status(400).json({ message: "Required fields are missing." });
-//   }
-
-//   try {
-//     // Check if email already exists in UserCredentials
-//     const existingUserCredential = await UserCredential.findOne({ email });
-//     if (existingUserCredential)
-//       return res.status(409).json({ message: "Email already exists." });
-
-//     // Create UserCredential
-//     const hashedPassword = await bcrypt.hash(password, 10);
-//     const newUserCredential = await UserCredential.create({
-//       email,
-//       password: hashedPassword,
-//     });
-
-//     // Create User, linking to UserCredential
-//     const newUser = await User.create({
-//       name,
-//       email,
-//       board,
-//       grade,
-//       credential_id: newUserCredential._id, // Link to the created UserCredential
-//     });
-
-//     // Generate token using the User's ID
-//     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
-
-//     res.status(201).json({ 
-//       token, 
-//       user: { 
-//         _id: newUser._id, // Include user ID in response
-//         name: newUser.name, 
-//         email: newUser.email, 
-//         board: newUser.board, 
-//         grade: newUser.grade 
-//       } 
-//     });
-//   } catch (error) {
-//     console.error('Registration error:', error);
-//     res.status(500).json({ message: "Server error", error: error.message });
-//   }
-// };
 
 export const register = async (req, res) => {
   const { name, email, password, board, grade } = req.body;
@@ -93,64 +36,41 @@ export const register = async (req, res) => {
   }
 
   try {
-    // Check if email already exists in UserCredentials
-    const existingUserCredential = await UserCredential.findOne({ email });
-    if (existingUserCredential)
-      return res.status(409).json({ message: "Email already exists." });
-
-    // Check if user already exists in Users collection
+    // Check if user already exists
     const existingUser = await User.findOne({ email });
-    if (existingUser)
-      return res.status(409).json({ message: "User already exists." });
+    if (existingUser) {
+      return res.status(409).json({ message: "Email already exists." });
+    }
 
-    // Create UserCredential first
-    const hashedPassword = await bcrypt.hash(password, 10);
-    const newUserCredential = await UserCredential.create({
-      email,
-      password: hashedPassword,
-    });
-
-    console.log('Created UserCredential:', newUserCredential._id);
-
-    // Create User, linking to UserCredential
+    // Create new user
     const newUser = await User.create({
       name,
       email,
+      password, // Will be hashed by pre-save middleware
       board,
       grade,
-      credential_id: newUserCredential._id, // This is the key fix
-      isGoogleUser: false, // Explicitly set for regular users
+      isGoogleUser: false,
       isVerified: false
     });
 
-    console.log('Created User with credential_id:', newUser.credential_id);
+    console.log('Created User:', newUser._id);
 
     // Generate token using the User's ID
     const token = jwt.sign({ id: newUser._id }, JWT_SECRET, { expiresIn: "7d" });
 
+    // Return user data (password excluded by select: false)
     res.status(201).json({ 
       token, 
-      user: { 
+      user: {
         _id: newUser._id,
         name: newUser.name, 
         email: newUser.email, 
         board: newUser.board, 
         grade: newUser.grade 
-      } 
+      }
     });
   } catch (error) {
     console.error('Registration error:', error);
-    
-    // If User creation fails, clean up the UserCredential
-    if (error.message.includes('User validation failed') || error.message.includes('credential_id')) {
-      try {
-        await UserCredential.deleteOne({ email });
-        console.log('Cleaned up UserCredential after User creation failure');
-      } catch (cleanupError) {
-        console.error('Error cleaning up UserCredential:', cleanupError);
-      }
-    }
-    
     res.status(500).json({ message: "Server error", error: error.message });
   }
 };
@@ -168,34 +88,32 @@ export const login = async (req, res) => {
 
     console.log('Attempting login for email:', email);
 
-    // Find user credentials first
-    const userCredential = await UserCredential.findOne({ email });
-    if (!userCredential) {
-      console.log('User credential not found for email:', email);
+    // Find user by email and include password
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) {
+      console.log('User not found for email:', email);
       return res.status(400).json({
-        message: "Invalid email or password" // Use a generic message for security
+        message: "Invalid email or password"
       });
     }
 
-    // Check password against the hashed password in UserCredential
-    const isMatch = await bcrypt.compare(password, userCredential.password);
+    // Check if it's a Google user trying to login with password
+    if (user.isGoogleUser) {
+      return res.status(400).json({
+        message: "Please use Google Sign-In for this account"
+      });
+    }
+
+    // Check password
+    const isMatch = await user.matchPassword(password);
     if (!isMatch) {
       console.log('Invalid password for email:', email);
       return res.status(400).json({
-        message: "Invalid email or password" // Use a generic message for security
+        message: "Invalid email or password"
       });
     }
 
-    // Find the corresponding User document using credential_id
-    const user = await User.findOne({ credential_id: userCredential._id }).select('-password'); // Exclude password from the User object
-
-    if (!user) {
-         console.log('User document not found for credential_id:', userCredential._id);
-         return res.status(404).json({ message: 'User profile not found' });
-    }
-
     // Generate token using the User's ID
-    console.log('JWT_SECRET value before signing:', process.env.JWT_SECRET);
     const token = jwt.sign(
       { id: user._id },
       process.env.JWT_SECRET,
@@ -204,7 +122,7 @@ export const login = async (req, res) => {
 
     console.log('Login successful for user:', user.email);
 
-    // Send response with User details
+    // Send response with User details (password excluded by default)
     res.status(200).json({
       token,
       user: {
@@ -226,60 +144,86 @@ export const login = async (req, res) => {
 };
 
 export const changePassword = async (req, res) => {
-  // Implementation for changing password
-  res.status(501).json({ message: "Change password not implemented" });
+  try {
+    const { currentPassword, newPassword } = req.body;
+    const userId = req.user.id; // From auth middleware
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ message: "Current password and new password are required" });
+    }
+
+    // Find user with password
+    const user = await User.findById(userId).select('+password');
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // Check if it's a Google user
+    if (user.isGoogleUser) {
+      return res.status(400).json({ message: "Google users cannot change password" });
+    }
+
+    // Verify current password
+    const isMatch = await user.matchPassword(currentPassword);
+    if (!isMatch) {
+      return res.status(400).json({ message: "Current password is incorrect" });
+    }
+
+    // Update password (will be hashed by pre-save middleware)
+    user.password = newPassword;
+    await user.save();
+
+    res.status(200).json({ message: "Password changed successfully" });
+
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      message: "Server error during password change",
+      error: error.message
+    });
+  }
 };
 
 export const forgetPassword = async (req, res) => {
     try {
+        console.log('Forget password request received:', req.body);
+        
         const { email } = req.body;
-
         if (!email) {
+            console.log('Email missing in request');
             return res.status(400).json({ message: "Email is required" });
         }
 
-        console.log('Processing forgot password request for:', email);
-        console.log('Email configuration:', {
-            user: process.env.EMAIL_USER,
-            hasPassword: !!process.env.EMAIL_PASSWORD,
-            frontendUrl: process.env.FRONTEND_URL
-        });
-
-        // Find user by email
-        const userCredential = await UserCredential.findOne({ email });
-        if (!userCredential) {
-            console.log('No user found with email:', email);
+        console.log('Looking for user with email:', email);
+        const user = await User.findOne({ email });
+        
+        if (!user) {
+            console.log('User not found');
             return res.status(404).json({ message: "No account found with this email" });
         }
 
-        console.log('User found, generating reset token');
+        if (user.isGoogleUser) {
+            console.log('Google user attempted password reset');
+            return res.status(400).json({ 
+                message: "Google users cannot reset password. Please use Google Sign-In." 
+            });
+        }
 
-        // Generate reset token
-        const resetToken = crypto.randomBytes(32).toString('hex');
-        const tokenExpiry = Date.now() + 3600000; // Token valid for 1 hour
+        const otp = generateOTP();
+        const otpExpiry = Date.now() + 600000;
+        
+        console.log('Generated OTP:', otp);
+        
+        user.resetPasswordOTP = otp;
+        user.resetPasswordOTPExpiry = otpExpiry;
+        await user.save();
+        console.log('OTP saved to user document');
 
-        // Store token (in production, store in database)
-        resetTokens.set(email, {
-            token: resetToken,
-            expiry: tokenExpiry
-        });
-
-        // Create reset URL
-        const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
-        console.log('Reset URL generated:', resetUrl);
-
-        // Send email
         const mailOptions = {
-            from: process.env.EMAIL_USER,
+            from: `Learnomic <${process.env.EMAIL_USER}>`,
             to: email,
-            subject: 'Password Reset Request',
-            html: `
-                <h1>Password Reset Request</h1>
-                <p>You requested a password reset. Click the link below to reset your password:</p>
-                <a href="${resetUrl}">Reset Password</a>
-                <p>This link will expire in 1 hour.</p>
-                <p>If you didn't request this, please ignore this email.</p>
-            `
+            subject: 'Password Reset OTP',
+            html: `OTP: ${otp}`
         };
 
         console.log('Attempting to send email...');
@@ -287,69 +231,69 @@ export const forgetPassword = async (req, res) => {
         console.log('Email sent successfully');
 
         res.status(200).json({ 
-            message: "Password reset email sent successfully",
-            note: "Check your email for reset instructions"
+            message: "OTP sent to your email successfully",
+            note: "Check your email for the OTP"
         });
 
     } catch (error) {
-        console.error('Forgot password error:', error);
-        console.error('Error details:', {
-            name: error.name,
-            message: error.message,
-            stack: error.stack
-        });
+        console.error('Full error in forgetPassword:', error);
         res.status(500).json({ 
             message: "Error processing password reset request",
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+            error: error.message // Include full error message
         });
     }
 };
 
 export const resetPassword = async (req, res) => {
     try {
-        const { token, newPassword } = req.body;
+        const { email, otp, newPassword } = req.body;
 
-        if (!token || !newPassword) {
-            return res.status(400).json({ message: "Token and new password are required" });
+        if (!email || !otp || !newPassword) {
+            return res.status(400).json({ 
+                message: "Email, OTP and new password are required" 
+            });
         }
 
-        // Find the email associated with this token
-        let email = null;
-        for (const [storedEmail, tokenData] of resetTokens.entries()) {
-            if (tokenData.token === token) {
-                email = storedEmail;
-                break;
-            }
-        }
-
-        if (!email) {
-            return res.status(400).json({ message: "Invalid or expired reset token" });
-        }
-
-        // Check if token is expired
-        const tokenData = resetTokens.get(email);
-        if (Date.now() > tokenData.expiry) {
-            resetTokens.delete(email);
-            return res.status(400).json({ message: "Reset token has expired" });
-        }
-
-        // Find user credentials
-        const userCredential = await UserCredential.findOne({ email });
-        if (!userCredential) {
+        // Find user
+        const user = await User.findOne({ email }).select('+resetPasswordOTP +resetPasswordOTPExpiry');
+        if (!user) {
             return res.status(404).json({ message: "User not found" });
         }
 
-        // Hash new password
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        // Check if it's a Google user
+        if (user.isGoogleUser) {
+            return res.status(400).json({ 
+                message: "Google users cannot reset password" 
+            });
+        }
 
-        // Update password
-        userCredential.password = hashedPassword;
-        await userCredential.save();
+        // 🔍 Debug logs
+        console.log("OTP from frontend:", otp);
+        console.log("OTP stored in DB:", user.resetPasswordOTP);
 
-        // Remove used token
-        resetTokens.delete(email);
+        // ✅ Compare as strings to avoid type mismatch
+        if (String(user.resetPasswordOTP) !== String(otp)) {
+            return res.status(400).json({ 
+                message: "Invalid OTP" 
+            });
+        }
 
-        res.status(200).json({ message: "Password has been reset successfully" });
+        // Check if OTP is expired
+        if (Date.now() > user.resetPasswordOTPExpiry) {
+            return res.status(400).json({ 
+                message: "OTP has expired" 
+            });
+        }
+
+        // Update password (will be hashed by pre-save middleware)
+        user.password = newPassword;
+        user.resetPasswordOTP = undefined;
+        user.resetPasswordOTPExpiry = undefined;
+        await user.save();
+
+        res.status(200).json({ 
+            message: "Password has been reset successfully" 
+        });
 
     } catch (error) {
         console.error('Reset password error:', error);
