@@ -14,22 +14,22 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
   },
-  credential_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'UserCredential',
-    required: function () {
+  password: {
+    type: String,
+    required: function() {
       return !this.isGoogleUser;
-    }
+    },
+    select: false // Don't include password by default in queries
   },
   board: {
     type: String,
-    required: function () {
+    required: function() {
       return !this.isGoogleUser;
     }
   },
   grade: {
     type: String,
-    required: function () {
+    required: function() {
       return !this.isGoogleUser;
     }
   },
@@ -49,28 +49,7 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  school: {
-    type: String
-  },
-  div: {
-    type: String
-  },
-  pincode: {
-    type: String
-  },
-  badges: {
-    type: [String],
-    default: []
-  },
   totalTimeSpent: {
-    type: Number,
-    default: 0
-  },
-  currentStreak: {
-    type: Number,
-    default: 0
-  },
-  longestStreak: {
     type: Number,
     default: 0
   },
@@ -86,33 +65,45 @@ const UserSchema = new mongoose.Schema({
     type: [String],
     default: []
   },
-   videoProgress: {
+  videoProgress: {
     type: [VideoProgressSchema],
     default: [],
   },
+  resetPasswordOTP: {
+    type: String,
+    select: false
+  },
+  resetPasswordOTPExpiry: {
+    type: Date,
+    select: false
+  }
 }, {
   collection: 'Users',
   timestamps: true
 });
 
-UserSchema.methods.matchPassword = async function (enteredPassword) {
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password') || this.isGoogleUser) {
+    return next();
+  }
+
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Method to compare passwords
+UserSchema.methods.matchPassword = async function(enteredPassword) {
   if (this.isGoogleUser) {
     return false;
   }
 
-  try {
-    const UserCredential = mongoose.model('UserCredential');
-    const credential = await UserCredential.findById(this.credential_id);
-
-    if (!credential) {
-      return false;
-    }
-
-    return await bcrypt.compare(enteredPassword, credential.password);
-  } catch (error) {
-    console.error('Error matching password:', error);
-    return false;
-  }
+  return await bcrypt.compare(enteredPassword, this.password);
 };
 
 const User = mongoose.model("User", UserSchema);
