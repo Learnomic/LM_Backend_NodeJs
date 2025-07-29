@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import bcrypt from 'bcryptjs';
+import VideoProgressSchema from "./VideoProgressSchema.js";
 
 const UserSchema = new mongoose.Schema({
   name: {
@@ -13,30 +14,28 @@ const UserSchema = new mongoose.Schema({
     unique: true,
     lowercase: true,
   },
-  // Link to UserCredential for non-Google users
-  credential_id: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'UserCredential',
+  password: {
+    type: String,
     required: function() {
-      return !this.isGoogleUser; // Required only for non-Google users
-    }
+      return !this.isGoogleUser;
+    },
+    select: false // Don't include password by default in queries
   },
   board: {
     type: String,
     required: function() {
-      return !this.isGoogleUser; // Board required only for regular users
+      return !this.isGoogleUser;
     }
   },
   grade: {
     type: String,
     required: function() {
-      return !this.isGoogleUser; // Grade required only for regular users
+      return !this.isGoogleUser;
     }
   },
-  // Google Auth fields
   googleId: {
     type: String,
-    sparse: true // Allows multiple null values
+    sparse: true
   },
   isGoogleUser: {
     type: Boolean,
@@ -50,29 +49,7 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  // Optional fields for Google users
-  school: {
-    type: String
-  },
-  div: {
-    type: String
-  },
-  pincode: {
-    type: String
-  },
-  badges: {
-    type: [String],
-    default: []
-  },
   totalTimeSpent: {
-    type: Number,
-    default: 0
-  },
-  currentStreak: {
-    type: Number,
-    default: 0
-  },
-  longestStreak: {
     type: Number,
     default: 0
   },
@@ -87,47 +64,48 @@ const UserSchema = new mongoose.Schema({
   completedVideos: {
     type: [String],
     default: []
+  },
+  videoProgress: {
+    type: [VideoProgressSchema],
+    default: [],
+  },
+  resetPasswordOTP: {
+    type: String,
+    select: false
+  },
+  resetPasswordOTPExpiry: {
+    type: Date,
+    select: false
   }
 }, {
   collection: 'Users',
   timestamps: true
 });
 
-// Remove the password hashing middleware since password is now in UserCredential
-// UserSchema.pre('save', async function(next) {
-//   if (!this.isModified('password') || !this.password) {
-//     return next();
-//   }
-//   
-//   try {
-//     const salt = await bcrypt.genSalt(10);
-//     this.password = await bcrypt.hash(this.password, salt);
-//     next();
-//   } catch (error) {
-//     next(error);
-//   }
-// });
+// Hash password before saving
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password') || this.isGoogleUser) {
+    return next();
+  }
 
-// Method to check password - now checks against linked UserCredential
+  try {
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
+  } catch (error) {
+    next(error);
+  }
+});
+
+// Method to compare passwords
 UserSchema.methods.matchPassword = async function(enteredPassword) {
   if (this.isGoogleUser) {
-    return false; // Google users don't have passwords
-  }
-  
-  try {
-    const UserCredential = mongoose.model('UserCredential');
-    const credential = await UserCredential.findById(this.credential_id);
-    
-    if (!credential) {
-      return false;
-    }
-    
-    return await bcrypt.compare(enteredPassword, credential.password);
-  } catch (error) {
-    console.error('Error matching password:', error);
     return false;
   }
+
+  return await bcrypt.compare(enteredPassword, this.password);
 };
 
 const User = mongoose.model("User", UserSchema);
+
 export default User;
