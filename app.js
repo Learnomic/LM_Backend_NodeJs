@@ -29,7 +29,7 @@ const PORT = process.env.PORT || 5000;
 
 app.use(cors());
 app.use(express.json());
-// app.use('/api/googleauth', googleAuthRoutes);
+app.use('/api/googleauth', googleAuthRoutes);
 app.use('/api/curriculum', curriculumRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/dashboard', dashboardRoutes);

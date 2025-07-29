@@ -265,58 +265,58 @@ export const refreshProfilePicture = asyncHandler(async (req, res) => {
 // });
 
 // Complete Google User Profile (for users who need to add board/grade)
-export const completeGoogleProfile = asyncHandler(async (req, res) => {
-    try {
-        const { board, grade, school, div, pincode } = req.body;
-        const userId = req.user._id; // Assuming you have auth middleware
+// export const completeGoogleProfile = asyncHandler(async (req, res) => {
+//     try {
+//         const { board, grade, school, div, pincode } = req.body;
+//         const userId = req.user._id; // Assuming you have auth middleware
 
-        if (!board || !grade) {
-            return res.status(400).json({
-                success: false,
-                message: 'Board and grade are required'
-            });
-        }
+//         if (!board || !grade) {
+//             return res.status(400).json({
+//                 success: false,
+//                 message: 'Board and grade are required'
+//             });
+//         }
 
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({
-                success: false,
-                message: 'User not found'
-            });
-        }
+//         const user = await User.findById(userId);
+//         if (!user) {
+//             return res.status(404).json({
+//                 success: false,
+//                 message: 'User not found'
+//             });
+//         }
 
-        user.board = board;
-        user.grade = grade;
-        if (school) user.school = school;
-        if (div) user.div = div;
-        if (pincode) user.pincode = pincode;
+//         user.board = board;
+//         user.grade = grade;
+//         if (school) user.school = school;
+//         if (div) user.div = div;
+//         if (pincode) user.pincode = pincode;
 
-        await user.save();
+//         await user.save();
 
-        res.status(200).json({
-            success: true,
-            message: 'Profile completed successfully',
-            user: {
-                _id: user._id,
-                name: user.name,
-                email: user.email,
-                profilePicture: user.profilePicture,
-                isGoogleUser: user.isGoogleUser,
-                isVerified: user.isVerified,
-                board: user.board,
-                grade: user.grade,
-                school: user.school,
-                div: user.div,
-                pincode: user.pincode
-            }
-        });
+//         res.status(200).json({
+//             success: true,
+//             message: 'Profile completed successfully',
+//             user: {
+//                 _id: user._id,
+//                 name: user.name,
+//                 email: user.email,
+//                 profilePicture: user.profilePicture,
+//                 isGoogleUser: user.isGoogleUser,
+//                 isVerified: user.isVerified,
+//                 board: user.board,
+//                 grade: user.grade,
+//                 school: user.school,
+//                 div: user.div,
+//                 pincode: user.pincode
+//             }
+//         });
 
-    } catch (error) {
-        console.error('Complete Profile Error:', error);
-        res.status(500).json({
-            success: false,
-            message: 'Error completing profile',
-            error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
-        });
-    }
-});
+//     } catch (error) {
+//         console.error('Complete Profile Error:', error);
+//         res.status(500).json({
+//             success: false,
+//             message: 'Error completing profile',
+//             error: process.env.NODE_ENV === 'development' ? error.message : 'Internal server error'
+//         });
+//     }
+// });

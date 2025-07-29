@@ -5,7 +5,5 @@ import protect from '../middleware/authMiddleware.js'; // Assuming you have auth
 const router = express.Router();
 
 router.post('/google-signin', googleSignIn);
-// router.post('/signin', signIn);
-router.post('/complete-profile', protect, completeGoogleProfile);
 
 export default router;
