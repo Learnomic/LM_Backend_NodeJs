@@ -24,6 +24,9 @@ const VideoProgressSchema = new mongoose.Schema({
     type: Number,
     default: 0,
   },
+  board: { type: String },
+grade: { type: String },
+medium: { type: String }
 }, { _id: false });
 
 export default VideoProgressSchema;
