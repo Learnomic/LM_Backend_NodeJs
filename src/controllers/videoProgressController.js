@@ -2,49 +2,45 @@
 import User from "../models/User.js";
 import Video from '../models/Video.js';
 import axios from 'axios';
+import VideoProgress from '../models/VideoProgressSchema.js';
 // import dotenv from 'dotenv';
 // dotenv.config();
 
 export const updateVideoProgress = async (req, res) => {
-  const userId = req.user._id; // pulled from Protect middleware
-  const { videoId, currentTime, isCompleted, sessionWatchTime, board, grade, medium  } = req.body;
+  const userId = req.user._id;
+  const {
+    videoId,
+    currentTime,
+    isCompleted,
+    sessionWatchTime,
+    board,
+    grade,
+    medium,
+  } = req.body;
 
   try {
-    const user = await User.findById(userId);
-    if (!user) return res.status(404).json({ message: "User not found" });
+    const update = {
+      currentTime,
+      lastWatched: new Date(),
+      isCompleted,
+      board,
+      grade,
+      medium,
+    };
 
-    const progress = user.videoProgress.find(
-      (p) => p.videoId.toString() === videoId
-    );
-
-    if (progress) {
-      progress.currentTime = currentTime;
-      progress.isCompleted = isCompleted || progress.isCompleted;
-      progress.lastWatched = new Date();
-      if (sessionWatchTime && sessionWatchTime > 0) {
-        progress.totalWatchTime += sessionWatchTime;
-      }
-
-            if (board) progress.board = board;
-      if (grade) progress.grade = grade;
-      if (medium) progress.medium = medium;
-
-
+    if (sessionWatchTime && sessionWatchTime > 0) {
+      update.$inc = { totalWatchTime: sessionWatchTime };
     } else {
-      user.videoProgress.push({
-        videoId,
-        currentTime,
-        isCompleted,
-        lastWatched: new Date(),
-        totalWatchTime: sessionWatchTime || currentTime || 0,
-        board,  
-        grade,  
-        medium  
-      });
+      update.totalWatchTime = currentTime || 0;
     }
 
-    await user.save();
-    res.status(200).json({ success: true, videoProgress: user.videoProgress });
+    const updatedProgress = await VideoProgress.findOneAndUpdate(
+      { userId, videoId },
+      { $set: update, $inc: update.$inc || {} },
+      { new: true, upsert: true } // Create if doesn't exist
+    );
+
+    res.status(200).json({ success: true, videoProgress: updatedProgress });
   } catch (err) {
     console.error("Error updating video progress:", err);
     res.status(500).json({ message: "Server error" });
@@ -56,28 +52,22 @@ export const getVideoProgress = async (req, res) => {
   const { videoId } = req.body;
 
   if (!videoId) {
-    return res.status(400).json({ message: "videoId is required in query" });
+    return res.status(400).json({ message: "videoId is required" });
   }
 
   try {
-    const user = await User.findById(userId).select("videoProgress");
-    if (!user) return res.status(404).json({ message: "User not found" });
-
-    const progress = user.videoProgress.find(
-      (p) => p.videoId.toString() === videoId
-    );
+    const progress = await VideoProgress.findOne({ userId, videoId });
 
     if (!progress) {
-      // Return default progress instead of 404
-      return res.status(200).json({ 
-        success: true, 
+      return res.status(200).json({
+        success: true,
         progress: {
-          videoId: videoId,
+          videoId,
           currentTime: 0,
           lastWatched: null,
           isCompleted: false,
-          totalWatchTime: 0
-        }
+          totalWatchTime: 0,
+        },
       });
     }
 
@@ -87,6 +77,7 @@ export const getVideoProgress = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
 
 // Extract YouTube video ID from URL
 const extractVideoId = (url) => {
@@ -132,21 +123,15 @@ export const getResumeLearningBySubjects = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const user = await User.findById(userId)
-      .select('videoProgress')
-      .populate('videoProgress.videoId');
-
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    const grouped = {};
-
-    const filteredProgress = user.videoProgress
-      .filter(p => !p.isCompleted && p.currentTime > 0 && p.videoId)
-      .sort((a, b) => new Date(b.lastWatched) - new Date(a.lastWatched));
-
-    for (const p of filteredProgress) {
+   const progressList = await VideoProgress.find({ 
+  userId, 
+  isCompleted: false, 
+  currentTime: { $gt: 0 } 
+})
+  .sort({ lastWatched: -1 })
+  .populate('videoId');
+const grouped = {};
+    for (const p of progressList) {
       const video = p.videoId;
       console.log("video :", video );
       
