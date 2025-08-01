@@ -33,6 +33,11 @@ const UserSchema = new mongoose.Schema({
       return !this.isGoogleUser;
     }
   },
+  schoolName: {
+    type: String,
+    trim: true,
+    default: ''
+  },
   googleId: {
     type: String,
     sparse: true
@@ -69,6 +74,14 @@ const UserSchema = new mongoose.Schema({
     type: [VideoProgressSchema],
     default: [],
   },
+streak: {
+  type: Number,
+  default: 0,
+},
+lastVisited: {
+  type: Date,
+  default: null,
+},
   resetPasswordOTP: {
     type: String,
     select: false

@@ -17,6 +17,7 @@ import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
 import './passport.js'; 
 
 import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
+import userRoutes from './src/routes/userRoutes.js';
 
 // Connect to MongoDB
 connectDB();
@@ -49,6 +50,8 @@ app.use('/api/video-progress', videoProgressRoutes);
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
+
+app.use('/api/user', userRoutes);
 
 app.get('/api/test', (req, res) => {
   res.send('API is working');
