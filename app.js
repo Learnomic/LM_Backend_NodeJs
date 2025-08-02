@@ -18,7 +18,6 @@ import userRoutes from './src/routes/userRoutes.js';
 import './passport.js'; 
 
 import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
-import userRoutes from './src/routes/userRoutes.js';
 
 // Connect to MongoDB
 connectDB();
