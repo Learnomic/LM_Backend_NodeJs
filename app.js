@@ -14,6 +14,7 @@ import leaderboardRoutes from './src/routes/leaderboardRoutes.js';
 import questionPaperRoute from './src/routes/QuestPaperRoute.js';
 import quizRoutes from './src/routes/quizRoutes.js';
 import googleAuthRoutes from './src/routes/googleAuthRoutes.js';
+import userRoutes from './src/routes/userRoutes.js';
 import './passport.js'; 
 
 import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
@@ -38,6 +39,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/videos', curriculumRoutes);
 app.use('/api/question-paper', questionPaperRoute);
+app.use('/api', userRoutes);
 
 app.use('/api/quiz', (req, res, next) => {
   console.log(`Quiz route accessed: ${req.method} ${req.originalUrl}`);
