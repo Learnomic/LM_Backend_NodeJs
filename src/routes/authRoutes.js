@@ -1,8 +1,9 @@
 // routes/authRoutes.js
 import express from "express";
-const router = express.Router();
 import { register, login, changePassword, forgetPassword, resetPassword } from "../controllers/authController.js";
 import protect  from "../middleware/authMiddleware.js";
+
+const router = express.Router();
 
 // Public Routes
 router.post("/register", register);
