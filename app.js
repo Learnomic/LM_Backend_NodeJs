@@ -18,6 +18,7 @@ import userRoutes from './src/routes/userRoutes.js';
 import './passport.js'; 
 
 import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
+import userRoutes from './src/routes/userRoutes.js';
 
 // Connect to MongoDB
 connectDB();
@@ -39,7 +40,7 @@ app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/videos', curriculumRoutes);
 app.use('/api/question-paper', questionPaperRoute);
-app.use('/api', userRoutes);
+app.use('/api/user', userRoutes);
 
 app.use('/api/quiz', (req, res, next) => {
   console.log(`Quiz route accessed: ${req.method} ${req.originalUrl}`);
