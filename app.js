@@ -19,6 +19,8 @@ import './passport.js';
 
 import videoProgressRoutes from './src/routes/videoProgressRoutes.js';
 
+import adminRoutes from './src/routes/adminRoutes.js';
+
 // Connect to MongoDB
 connectDB();
 
@@ -40,6 +42,7 @@ app.use('/api/leaderboard', leaderboardRoutes);
 app.use('/api/videos', curriculumRoutes);
 app.use('/api/question-paper', questionPaperRoute);
 app.use('/api/user', userRoutes);
+app.use('/api/admin', adminRoutes); 
 
 app.use('/api/quiz', (req, res, next) => {
   console.log(`Quiz route accessed: ${req.method} ${req.originalUrl}`);

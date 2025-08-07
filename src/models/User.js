@@ -33,6 +33,10 @@ const UserSchema = new mongoose.Schema({
       return !this.isGoogleUser;
     }
   },
+medium: {
+  type: [String], 
+  default: []
+},
   schoolName: {
     type: String,
     trim: true,
@@ -54,30 +58,20 @@ const UserSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  totalTimeSpent: {
+  // New field for counting completed videos
+  completedVideosCount: {
     type: Number,
-    default: 0
+    default: 0,
+    min: 0
   },
-  totalPoints: {
+  streak: {
     type: Number,
-    default: 0
+    default: 0,
   },
-  experience: {
-    type: Number,
-    default: 0
+  lastVisited: {
+    type: Date,
+    default: null,
   },
-  completedVideos: {
-    type: [String],
-    default: []
-  },
-streak: {
-  type: Number,
-  default: 0,
-},
-lastVisited: {
-  type: Date,
-  default: null,
-},
   resetPasswordOTP: {
     type: String,
     select: false
@@ -124,6 +118,21 @@ UserSchema.methods.matchPassword = async function(enteredPassword) {
   }
 
   return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Method to increment completed videos count
+UserSchema.methods.incrementCompletedVideos = async function() {
+  this.completedVideosCount += 1;
+  return await this.save();
+};
+
+// Method to decrement completed videos count (if needed for uncompleting videos)
+UserSchema.methods.decrementCompletedVideos = async function() {
+  if (this.completedVideosCount > 0) {
+    this.completedVideosCount -= 1;
+    return await this.save();
+  }
+  return this;
 };
 
 const User = mongoose.model("User", UserSchema);
