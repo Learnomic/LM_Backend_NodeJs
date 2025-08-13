@@ -77,11 +77,7 @@ export const updateVideoProgress = async (req, res) => {
 
     res.status(200).json({ 
       success: true, 
-      videoProgress: {
-        userId,
-        videoId,
-        ...updatedVideoProgress
-      }
+      message: "Video progress updated successfully",
     });
   } catch (err) {
     console.error("Error updating video progress:", err);
@@ -98,42 +94,51 @@ export const getVideoProgress = async (req, res) => {
   }
 
   try {
+    // Find user progress
     const userProgress = await VideoProgress.findOne({ userId });
+    
+    // Find video details
+    let video = await Video.findById(videoId);
+    if (!video) {
+      return res.status(404).json({ message: "Video not found" });
+    }
 
-    if (!userProgress) {
-      return res.status(200).json({
-        success: true,
-        progress: {
-          videoId,
-          currentTime: 0,
-          lastWatched: null,
-          isCompleted: false,
-          totalWatchTime: 0,
-        },
+    let totalDuration = video.totalDuration;
+    let thumbnail = video.thumbnail;
+
+    // If totalDuration is not stored, fetch from YouTube API and update DB
+    if (totalDuration === null || totalDuration === undefined) {
+      const youtubeData = await fetchYouTubeDuration(video.videoUrl);
+      totalDuration = youtubeData.duration;
+      thumbnail = youtubeData.thumbnail;
+
+      // Update video document with fetched data
+      await Video.findByIdAndUpdate(videoId, {
+        totalDuration,
+        thumbnail
       });
     }
 
-    const videoProgress = userProgress.getVideoProgress(videoId);
-
-    if (!videoProgress) {
-      return res.status(200).json({
-        success: true,
-        progress: {
-          videoId,
-          currentTime: 0,
-          lastWatched: null,
-          isCompleted: false,
-          totalWatchTime: 0,
-        },
-      });
+    // Get user's progress for this video
+    let videoProgress = null;
+    if (userProgress) {
+      videoProgress = userProgress.getVideoProgress(videoId);
     }
+
+    // Prepare response data
+    const progressData = {
+      videoId,
+      currentTime: videoProgress?.currentTime || 0,
+      lastWatched: videoProgress?.lastWatched || null,
+      isCompleted: videoProgress?.isCompleted || false,
+      totalWatchTime: videoProgress?.totalWatchTime || 0,
+      totalDuration, // Include total duration in response
+      progressPercent: totalDuration ? Math.round(((videoProgress?.currentTime || 0) / totalDuration) * 100) : 0
+    };
 
     res.status(200).json({ 
       success: true, 
-      progress: {
-        videoId,
-        ...videoProgress.toObject()
-      }
+      progress: progressData
     });
   } catch (err) {
     console.error("Error fetching video progress:", err);
@@ -164,21 +169,26 @@ const fetchYouTubeDuration = async (videoUrl) => {
 
   const apiKey = process.env.YOUTUBE_API_KEY;
 
-  const res = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
-    params: {
-      part: 'snippet,contentDetails',
-      id: videoId,
-      key: apiKey
-    }
-  });
+  try {
+    const res = await axios.get('https://www.googleapis.com/youtube/v3/videos', {
+      params: {
+        part: 'snippet,contentDetails',
+        id: videoId,
+        key: apiKey
+      }
+    });
 
-  const item = res.data.items?.[0];
-  if (!item) return { duration: null, thumbnail: null };
+    const item = res.data.items?.[0];
+    if (!item) return { duration: null, thumbnail: null };
 
-  const duration = parseDuration(item.contentDetails.duration);
-  const thumbnail = item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url;
+    const duration = parseDuration(item.contentDetails.duration);
+    const thumbnail = item.snippet.thumbnails?.high?.url || item.snippet.thumbnails?.default?.url;
 
-  return { duration, thumbnail };
+    return { duration, thumbnail };
+  } catch (error) {
+    console.error("Error fetching YouTube data:", error);
+    return { duration: null, thumbnail: null };
+  }
 };
 
 export const getResumeLearningBySubjects = async (req, res) => {
@@ -200,6 +210,13 @@ export const getResumeLearningBySubjects = async (req, res) => {
       !p.isCompleted && p.currentTime > 0
     );
 
+    if (incompleteProgress.length === 0) {
+      return res.status(200).json({
+        success: true,
+        resumeBySubject: {}
+      });
+    }
+
     // Sort by lastWatched (most recent first)
     incompleteProgress.sort((a, b) => new Date(b.lastWatched) - new Date(a.lastWatched));
 
@@ -213,22 +230,44 @@ export const getResumeLearningBySubjects = async (req, res) => {
     
     for (const p of populatedProgress.videoProgress) {
       // Skip if video is completed or has no progress
-      if (p.isCompleted || p.currentTime <= 0) continue;
+      if (p.isCompleted || p.currentTime <= 0) {
+        continue;
+      }
       
       const video = p.videoId;
-      if (!video) continue; // Skip if video was deleted
-      
-      console.log("video :", video);
+      if (!video) {
+        continue;
+      }
       
       const subject = video.subName;
+      
+      if (!subject) {
+        continue;
+      }
+      
       if (!grouped[subject]) grouped[subject] = [];
 
-      const { duration, thumbnail } = await fetchYouTubeDuration(video.videoUrl);
+      // Use stored duration/thumbnail if available, otherwise fetch from YouTube
+      let duration = video.totalDuration;
+      let thumbnail = video.thumbnail;
+
+      if (duration === null || duration === undefined) {
+        const youtubeData = await fetchYouTubeDuration(video.videoUrl);
+        duration = youtubeData.duration;
+        thumbnail = youtubeData.thumbnail;
+
+        // Update video document with fetched data
+        await Video.findByIdAndUpdate(video._id, {
+          totalDuration: duration,
+          thumbnail
+        });
+      }
+
       const progressPercent = duration
         ? Math.round((p.currentTime / duration) * 100)
         : null;
 
-      grouped[subject].push({
+      const videoData = {
         videoId: video._id,
         title: video.title,
         videoUrl: video.videoUrl,
@@ -244,12 +283,31 @@ export const getResumeLearningBySubjects = async (req, res) => {
         board: p.board,
         grade: p.grade,
         medium: p.medium        
-      });
+      };
+
+      grouped[subject].push(videoData);
     }
+
+    // Sort subjects by most recent lastWatched timestamp
+    // For each subject, find the most recent video's lastWatched time
+    const sortedSubjects = Object.keys(grouped).sort((subjectA, subjectB) => {
+      const mostRecentA = Math.max(...grouped[subjectA].map(v => new Date(v.lastWatched).getTime()));
+      const mostRecentB = Math.max(...grouped[subjectB].map(v => new Date(v.lastWatched).getTime()));
+      return mostRecentB - mostRecentA; // Most recent first
+    });
+
+    // Create sorted response object
+    const sortedResumeBySubject = {};
+    sortedSubjects.forEach(subject => {
+      // Sort videos within each subject by lastWatched (most recent first)
+      sortedResumeBySubject[subject] = grouped[subject].sort((a, b) => 
+        new Date(b.lastWatched) - new Date(a.lastWatched)
+      );
+    });
 
     res.status(200).json({
       success: true,
-      resumeBySubject: grouped
+      resumeBySubject: sortedResumeBySubject
     });
 
   } catch (err) {
@@ -257,6 +315,8 @@ export const getResumeLearningBySubjects = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+
 
 // Get all video progress for a user
 export const getAllVideoProgress = async (req, res) => {

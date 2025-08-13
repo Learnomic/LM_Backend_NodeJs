@@ -20,11 +20,11 @@ const quizSchema = new mongoose.Schema({
         required: true,
         trim: true
     },
-medium: {
-  type: [String], // Array of strings
-  required: false,
-  default: undefined
-},
+    medium: {
+    type: [String], // Array of strings
+    required: false,
+    default: undefined
+    },
         subName: {
         type: String,
         required: true,

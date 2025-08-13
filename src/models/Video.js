@@ -24,6 +24,14 @@ const videoSchema = new mongoose.Schema({
     videoUrl: {
         type: String,
         required: true
+    },
+    totalDuration: {
+        type: Number, // Duration in seconds
+        default: null
+    },
+    thumbnail: {
+        type: String,
+        default: null
     }
 }, {
     collection: 'Videos',
@@ -32,4 +40,4 @@ const videoSchema = new mongoose.Schema({
 
 const Video = mongoose.model('Video', videoSchema);
 
-export default Video; 
+export default Video;
