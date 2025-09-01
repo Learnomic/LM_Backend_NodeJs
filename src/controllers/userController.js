@@ -1,7 +1,7 @@
 import User from '../models/User.js';
 import moment from 'moment'; // Add at the top
 import VideoProgress from '../models/VideoProgressSchema.js';
-import Video from '../models/VideosQuiz.js'; 
+import VideosQuiz from '../models/VideosQuiz.js'; 
 
 // @desc    Get user profile
 // @route   GET /api/user/profile
@@ -18,13 +18,13 @@ let totalAvailableVideos;
 
 if (['CBSE', 'ICSE'].includes(user.board)) {
   // These boards ignore medium
-  totalAvailableVideos = await Video.countDocuments({
+  totalAvailableVideos = await VideosQuiz.countDocuments({
     board: user.board,
     grade: user.grade
   });
 } else {
   // For other boards (e.g., SSC), use medium
-  totalAvailableVideos = await Video.countDocuments({
+  totalAvailableVideos = await VideosQuiz.countDocuments({
     board: user.board,
     grade: user.grade,
     medium: { $in: user.medium || [] } // ✅ handle array
@@ -119,4 +119,94 @@ const updateUserProfile = async (req, res) => {
   }
 };
 
-export { getUserProfile, updateUserProfile };
+// @route   GET /api/user/subject-progress
+// @access  Private
+const getUserSubjectProgress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('board grade medium');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ✅ Step 1: Get all subjects with total video counts
+    const matchQuery = { board: user.board, grade: user.grade };
+    if (!['CBSE', 'ICSE'].includes(user.board)) {
+      matchQuery.medium = { $in: user.medium || [] };
+    }
+
+    const subjects = await VideosQuiz.aggregate([
+      { $match: matchQuery },
+      { $group: { _id: "$subName", totalVideos: { $sum: 1 } } },
+    ]);
+
+    // ✅ Step 2: Get user progress
+    const progress = await VideoProgress.findOne({ userId: user._id });
+
+    // ✅ Step 3: Build subject progress list
+    const subjectProgress = subjects.map((s) => {
+      const completed = progress?.videoProgress?.filter(
+        (v) => v.isCompleted && v.board === user.board && v.grade === user.grade && v.subName === s._id
+      ).length || 0;
+
+      return {
+        subject: s._id,
+        completedVideos: completed,
+        totalVideos: s.totalVideos,
+      };
+    });
+
+    res.json({ subjects: subjectProgress });
+  } catch (error) {
+    console.error("Error in getUserSubjectProgress:", error);
+    res.status(500).json({ message: "Server Error" });
+  }
+};
+
+// @route   GET /api/user/progress
+// @access  Private
+const getUserProgress = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id).select('board grade medium');
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    // ✅ Count all videos for overall grade
+    let totalAvailableVideos;
+    if (['CBSE', 'ICSE'].includes(user.board)) {
+      totalAvailableVideos = await VideosQuiz.countDocuments({
+        board: user.board,
+        grade: user.grade,
+      });
+    } else {
+      totalAvailableVideos = await VideosQuiz.countDocuments({
+        board: user.board,
+        grade: user.grade,
+        medium: { $in: user.medium || [] },
+      });
+    }
+
+    // ✅ Get progress record
+    const progress = await VideoProgress.findOne({ userId: user._id });
+
+    const completedVideosCount =
+      progress?.videoProgress?.filter((v) => v.isCompleted).length || 0;
+
+    // ✅ Overall grade progress %
+    const progressPercentage =
+      totalAvailableVideos > 0
+        ? Math.round((completedVideosCount / totalAvailableVideos) * 100)
+        : 0;
+
+    res.json({
+      completedVideosCount,
+      totalAvailableVideos,
+      progressPercentage,
+    });
+  } catch (error) {
+    console.error('Error in getUserProgress:', error);
+    res.status(500).json({ message: 'Server Error' });
+  }
+};
+
+export { getUserProfile, updateUserProfile, getUserSubjectProgress, getUserProgress };
