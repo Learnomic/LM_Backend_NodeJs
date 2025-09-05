@@ -8,7 +8,6 @@ import {
   getCompletedVideos,
   getRecentlyWatched,
   syncCompletedVideosCount,
-  migrateVideoProgressData
 } from "../controllers/videoProgressController.js";
 
 const router = express.Router();
@@ -35,6 +34,6 @@ router.get('/recent', protect, getRecentlyWatched);
 router.post('/sync-completed-count', protect, syncCompletedVideosCount);
 
 // Migration endpoint (run once to migrate from old schema to new schema)
-router.post('/migrate', protect, migrateVideoProgressData);
+// router.post('/migrate', protect, migrateVideoProgressData);
 
 export default router;

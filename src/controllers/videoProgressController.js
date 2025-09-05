@@ -20,7 +20,7 @@ export const updateVideoProgress = async (req, res) => {
 
   try {
     // First, get the video from VideosQuiz to get subName and ensure thumbnail/duration
-    let video = await VideosQuiz.findById(videoId);
+    let video = await VideosQuiz.findById({ _id: videoId });
     if (!video) {
       return res.status(404).json({ message: "Video not found" });
     }
@@ -181,8 +181,8 @@ export const getVideoProgress = async (req, res) => {
     const userProgress = await VideoProgress.findOne({ userId });
 
     // Fetch from VideosQuiz
-    let video = await VideosQuiz.findById(videoId);
-    console.log("Fetched video:", video);
+    console.log("Received videoId:", videoId, "Type:", videoId);
+    let video = await VideosQuiz.findById({ _id: videoId });
     
     if (!video) {
       return res.status(404).json({ message: "Video not found" });
@@ -466,60 +466,6 @@ export const syncCompletedVideosCount = async (req, res) => {
     });
   } catch (err) {
     console.error("Error syncing completed videos count:", err);
-    res.status(500).json({ message: "Server error" });
-  }
-};
-
-// Migration function to convert old VideoProgress documents to new VideoProgress format
-export const migrateVideoProgressData = async (req, res) => {
-  try {
-    // This assumes you still have access to the old VideoProgress model for migration
-    const VideoProgress = require('../models/VideoProgressSchema.js').default;
-    
-    const allProgress = await VideoProgress.find({});
-    const userProgressMap = new Map();
-    
-    // Group progress by userId
-    for (const progress of allProgress) {
-      const userId = progress.userId.toString();
-      
-      if (!userProgressMap.has(userId)) {
-        userProgressMap.set(userId, []);
-      }
-      
-      userProgressMap.get(userId).push({
-        videoId: progress.videoId,
-        currentTime: progress.currentTime,
-        lastWatched: progress.lastWatched,
-        isCompleted: progress.isCompleted,
-        totalWatchTime: progress.totalWatchTime,
-        board: progress.board,
-        grade: progress.grade,
-        medium: progress.medium
-      });
-    }
-    
-    // Create new VideoProgress documents
-    let migratedCount = 0;
-    for (const [userId, videoProgressArray] of userProgressMap) {
-      const existingUserProgress = await VideoProgress.findOne({ userId });
-      
-      if (!existingUserProgress) {
-        await VideoProgress.create({
-          userId,
-          videoProgress: videoProgressArray,
-          lastActivity: new Date()
-        });
-        migratedCount++;
-      }
-    }
-    
-    res.status(200).json({
-      success: true,
-      message: `Migrated video progress data for ${migratedCount} users`
-    });
-  } catch (err) {
-    console.error("Error migrating video progress data:", err);
     res.status(500).json({ message: "Server error" });
   }
 };
