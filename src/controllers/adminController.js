@@ -2,6 +2,7 @@ import User from '../models/User.js';
 import QuizScore from '../models/QuizScore.js';
 import VideoProgress from '../models/VideoProgressSchema.js';
 
+// route /admin/users/analytics
 export const getAllUserAnalytics = async (req, res) => {
   try {
     const users = await User.find().sort({ createdAt: -1 });
@@ -41,7 +42,7 @@ export const getAllUserAnalytics = async (req, res) => {
   }
 };
 
-// Add this new controller function to adminController.js
+// route /admin/subjects/analytics
 export const getSubjectAnalytics = async (req, res) => {
   try {
     // Get subject-wise quiz performance
