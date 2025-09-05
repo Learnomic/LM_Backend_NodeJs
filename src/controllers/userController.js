@@ -70,6 +70,7 @@ const completedVideosCount = progress?.videoProgress?.filter(
       email: user.email,
       board: user.board,
       grade: user.grade,
+      medium: user.medium,
       schoolName: user.schoolName,
       profilePicture: user.profilePicture,
       weeklyTimeSpent,
@@ -97,6 +98,7 @@ const updateUserProfile = async (req, res) => {
     user.name = req.body.name ?? user.name;
     user.board = req.body.board ?? user.board;
     user.grade = req.body.grade ?? user.grade;
+    user.medium = req.body.medium ?? user.medium;
     user.schoolName = req.body.schoolName ?? user.schoolName;
     user.profilePicture = req.body.profilePicture ?? user.profilePicture;
 
@@ -108,6 +110,7 @@ const updateUserProfile = async (req, res) => {
       email: updatedUser.email,
       board: updatedUser.board,
       grade: updatedUser.grade,
+      medium: updatedUser.medium,
       schoolName: updatedUser.schoolName,
       profilePicture: updatedUser.profilePicture,
       completedVideosCount: updatedUser.completedVideosCount, // Include in response
