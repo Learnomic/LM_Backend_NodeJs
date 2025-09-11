@@ -290,6 +290,8 @@ UserSchema.methods.decrementCompletedVideos = async function() {
   return this;
 };
 
+UserSchema.index({ createdAt: -1 });
+
 const User = mongoose.model("User", UserSchema);
 
 export default User;

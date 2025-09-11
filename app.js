@@ -22,9 +22,7 @@ import adminRoutes from './src/routes/adminRoutes.js';
 // Import notification routes
 import notificationRoutes from './src/controllers/notification/notificationRoutes.js';
 import fcmRoutes from './src/controllers/notification/fcmRoutes.js';
-
-// Connect to MongoDB
-connectDB();
+import { initializeContainer } from './src/config/Azure/azureStore.js'; // ✅ Fixed path
 
 const app = express();
 app.use((req, res, next) => {
@@ -50,7 +48,6 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/fcm', fcmRoutes);
 
-
 app.use('/api/quiz', (req, res, next) => {
   console.log(`Quiz route accessed: ${req.method} ${req.originalUrl}`);
   next();
@@ -58,13 +55,30 @@ app.use('/api/quiz', (req, res, next) => {
 
 app.use('/api/video-progress', videoProgressRoutes);
 
-app.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
-});
-
 app.get('/api/test', (req, res) => {
   res.send('API is working');
 });
 
+// ✅ Initialize services and start server
+const startServer = async () => {
+  try {
+    // Connect to MongoDB
+    await connectDB();
+    
+    // Initialize Azure Blob Storage
+    await initializeContainer();
+    
+    // Start the server
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error('Failed to start server:', error);
+    process.exit(1);
+  }
+};
+
+// Start the server
+startServer();
 
 export default app;

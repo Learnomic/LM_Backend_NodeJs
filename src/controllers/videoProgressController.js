@@ -3,6 +3,7 @@ import User from "../models/User.js";
 import VideosQuiz from '../models/VideosQuiz.js';
 import axios from 'axios';
 import VideoProgress from '../models/VideoProgressSchema.js'; // Updated import
+
 // import dotenv from 'dotenv';
 // dotenv.config();
 
@@ -469,3 +470,57 @@ export const syncCompletedVideosCount = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
+
+// // Migration function to convert old VideoProgress documents to new VideoProgress format
+// export const migrateVideoProgressData = async (req, res) => {
+//   try {
+//     // This assumes you still have access to the old VideoProgress model for migration
+//     // const OldVideoProgress = OldVideoProgress.default;
+    
+//     const allProgress = await OldVideoProgress.find({});
+//     const userProgressMap = new Map();
+    
+//     // Group progress by userId
+//     for (const progress of allProgress) {
+//       const userId = progress.userId.toString();
+      
+//       if (!userProgressMap.has(userId)) {
+//         userProgressMap.set(userId, []);
+//       }
+      
+//       userProgressMap.get(userId).push({
+//         videoId: progress.videoId,
+//         currentTime: progress.currentTime,
+//         lastWatched: progress.lastWatched,
+//         isCompleted: progress.isCompleted,
+//         totalWatchTime: progress.totalWatchTime,
+//         board: progress.board,
+//         grade: progress.grade,
+//         medium: progress.medium
+//       });
+//     }
+    
+//     // Create new VideoProgress documents
+//     let migratedCount = 0;
+//     for (const [userId, videoProgressArray] of userProgressMap) {
+//       const existingUserProgress = await VideoProgress.findOne({ userId });
+      
+//       if (!existingUserProgress) {
+//         await VideoProgress.create({
+//           userId,
+//           videoProgress: videoProgressArray,
+//           lastActivity: new Date()
+//         });
+//         migratedCount++;
+//       }
+//     }
+    
+//     res.status(200).json({
+//       success: true,
+//       message: `Migrated video progress data for ${migratedCount} users`
+//     });
+//   } catch (err) {
+//     console.error("Error migrating video progress data:", err);
+//     res.status(500).json({ message: "Server error" });
+//   }
+// };
