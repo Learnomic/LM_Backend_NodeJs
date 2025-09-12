@@ -126,7 +126,7 @@ export const submitQuiz = asyncHandler(async (req, res) => {
 
     try {
         // ✅ Ensure quiz exists
-        const videoQuiz = await VideosQuiz.findById(videoId);
+const videoQuiz = await VideosQuiz.findById(videoId);
         if (!videoQuiz) {
             return res.status(404).json({
                 success: false,
