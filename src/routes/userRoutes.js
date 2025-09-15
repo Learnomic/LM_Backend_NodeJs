@@ -7,7 +7,8 @@ import {
   getUserSubjectProgress,
   getUserProgress,
   uploadProfilePicture,
-  deleteProfilePicture
+  deleteProfilePicture,
+  getStudyInsights   
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -17,6 +18,7 @@ router.get('/profile',protect, getUserProfile);
 router.put('/update_profile',protect, updateUserProfile);
 router.get('/subject-progress',protect, getUserSubjectProgress);
 router.get('/progress',protect, getUserProgress);
+router.get('/study-insights',protect, getStudyInsights);
 
 // New routes for profile picture management
 router.post('/upload-profile-picture',protect, upload.single('profilePicture'), uploadProfilePicture);
