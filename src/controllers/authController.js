@@ -31,7 +31,7 @@ const resetTokens = new Map();
 export const register = async (req, res) => {
   const { name, email, password, board, grade } = req.body;
 
-  if (!name || !email || !password || !board || !grade) {
+  if (!name || !email || !password) {
     return res.status(400).json({ message: "Required fields are missing." });
   }
 
@@ -130,7 +130,8 @@ export const login = async (req, res) => {
         name: user.name,
         email: user.email,
         board: user.board,
-        grade: user.grade
+        grade: user.grade,
+        profilePicture: user.profilePicture
       },
     });
 

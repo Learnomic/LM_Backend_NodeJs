@@ -167,19 +167,19 @@ const UserSchema = new mongoose.Schema({
   },
   board: {
     type: String,
-    required: function() {
-      return !this.isGoogleUser;
-    }
+    required: false
+    // required: function() {
+    //   return !this.isGoogleUser;
+    // }
   },
   grade: {
     type: String,
-    required: function() {
-      return !this.isGoogleUser;
-    }
+    required:false
   },
   medium: {
     type: [String], 
-    default: []
+    default: [],
+    required: false
   },
   schoolName: {
     type: String,
