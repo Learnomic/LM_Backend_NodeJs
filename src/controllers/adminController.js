@@ -10,10 +10,6 @@ export const getAllUserAnalytics = async (req, res) => {
     const userAnalytics = await Promise.all(
       users.map(async (user) => {
         const totalQuizzes = await QuizScore.countDocuments({ userId: user._id });
-        const perfectScores = await QuizScore.countDocuments({
-          userId: user._id,
-          score: { $eq: 100 }
-        });
 
         const videoProgress = await VideoProgress.findOne({ userId: user._id });
         const recentVideos = videoProgress?.getRecentlyWatched(3) || [];
@@ -22,12 +18,13 @@ export const getAllUserAnalytics = async (req, res) => {
           id: user._id,
           name: user.name,
           email: user.email,
+          board: user.board || "Others", 
           createdAt: user.createdAt,
           lastVisited: user.lastVisited,
           totalQuizzes,
-          perfectScores,
           recentVideos: recentVideos.map(v => ({
             videoId: v.videoId,
+            subName: v.subName,
             lastWatched: v.lastWatched,
             isCompleted: v.isCompleted
           }))
@@ -35,7 +32,16 @@ export const getAllUserAnalytics = async (req, res) => {
       })
     );
 
-    res.status(200).json({ success: true, users: userAnalytics });
+    // 👇 aggregate student distribution by board
+    const boardDistribution = await User.aggregate([
+      { $group: { _id: "$board", count: { $sum: 1 } } }
+    ]);
+
+    res.status(200).json({ 
+      success: true, 
+      users: userAnalytics,
+      boardDistribution   // 👈 send along with users
+    });
   } catch (err) {
     console.error('Admin analytics fetch error:', err);
     res.status(500).json({ success: false, message: 'Server error' });
@@ -45,33 +51,40 @@ export const getAllUserAnalytics = async (req, res) => {
 // route /admin/subjects/analytics
 export const getSubjectAnalytics = async (req, res) => {
   try {
-    // Get subject-wise quiz performance
-    const subjectPerformance = await QuizScore.aggregate([
-      {
-        $group: {
-          _id: "$subjectName",
-          totalAttempts: { $sum: 1 },
-          avgScore: { $avg: "$score" },
-          perfectScores: { $sum: { $cond: [{ $eq: ["$score", 100] }, 1, 0] } },
-          totalQuestions: { $sum: "$totalQuestions" },
-          correctAnswers: { $sum: "$correctAnswers" }
-        }
+// Subject Performance (Quiz-based)
+const subjectPerformance = await QuizScore.aggregate([
+  {
+    $group: {
+      _id: {
+        board: "$board",
+        grade: "$grade",
+        subject: "$subjectName"
       },
-      { $sort: { totalAttempts: -1 } }
-    ]);
+      totalAttempts: { $sum: 1 },
+      avgScore: { $avg: "$score" },
+      totalQuestions: { $sum: "$totalQuestions" },
+      correctAnswers: { $sum: "$correctAnswers" }
+    }
+  },
+  { $sort: { " _id.board": 1, "_id.grade": 1, totalAttempts: -1 } }
+]);
 
-    // Get subject-wise video engagement
-    const videoEngagement = await VideoProgress.aggregate([
-      { $unwind: "$videoProgress" },
-      {
-        $group: {
-          _id: "$videoProgress.board", // or subject if available
-          totalWatched: { $sum: 1 },
-          completed: { $sum: { $cond: [{ $eq: ["$videoProgress.isCompleted", true] }, 1, 0] } },
-          avgWatchTime: { $avg: "$videoProgress.totalWatchTime" }
-        }
-      }
-    ]);
+// Video Engagement (per board + grade + subject)
+const videoEngagement = await VideoProgress.aggregate([
+  { $unwind: "$videoProgress" },
+  {
+    $group: {
+      _id: {
+        board: "$videoProgress.board",
+        grade: "$videoProgress.grade",
+        subject: "$videoProgress.subName"
+      },
+      totalWatched: { $sum: 1 },
+      completed: { $sum: { $cond: [{ $eq: ["$videoProgress.isCompleted", true] }, 1, 0] } },
+      avgWatchTime: { $avg: "$videoProgress.totalWatchTime" }
+    }
+  }
+]);
 
     res.status(200).json({
       success: true,
