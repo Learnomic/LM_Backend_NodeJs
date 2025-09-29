@@ -1,3 +1,5 @@
 {
-    "appService.showBuildDuringDeployPrompt": false
+    "appService.showBuildDuringDeployPrompt": false,
+    "appService.defaultWebAppToDeploy": "/subscriptions/d37ac9cb-977d-41a9-8c77-575dd3699cb6/resourceGroups/LearnomicRes/providers/Microsoft.Web/sites/learnomicnodebackend",
+    "appService.deploySubpath": "."
 }
