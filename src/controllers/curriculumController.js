@@ -473,12 +473,13 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
         if (medium) chapterQuery.medium = { $in: [medium] };
 
         // 🔹 Fetch chapters sorted by creation date ascending (oldest first)
-        const [chapters, videos] = await Promise.all([
-            Chapter.find(chapterQuery)
-                .sort({ createdAt: 1 }) // ✅ ascending order (oldest first)
-                .lean(),
-            VideoQuiz.find({ board, grade, subName: subjectName }).lean()
-        ]);
+const [chapters, videos] = await Promise.all([
+    Chapter.find(chapterQuery).lean(), // ✅ remove sort
+    VideoQuiz.find({ board, grade, subName: subjectName }).lean()
+]);
+
+// Then if you still want ascending order:
+chapters.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
 
         console.log('Found videos:', videos.length);
 
