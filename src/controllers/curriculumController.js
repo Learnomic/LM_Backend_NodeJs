@@ -289,7 +289,9 @@ export const getChapters = asyncHandler(async (req, res) => {
             subjectid: subject._id
         };
 
+        // Sort by creation date/time (latest first)
         const chapters = await Chapter.find(chapterQuery)
+            .sort({ createdAt: 1 })  
             .select('chaptername board grade medium')
             .lean()
             .exec();
@@ -306,6 +308,7 @@ export const getChapters = asyncHandler(async (req, res) => {
         res.status(500).json({ error: err.message });
     }
 });
+
 
 // @desc    Get topics for a specific chapter
 // @route   GET /api/topics/:chapterId
@@ -447,53 +450,37 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
     const cacheKey = getCacheKey('curriculum', subjectName, board, grade, medium || 'none');
 
     try {
-        // Check cache first
+        // 🔹 Check cache first
         const cached = getCache(cacheKey);
         if (cached) {
-            return res.status(200).json({
-                success: true,
-                data: cached
-            });
+            return res.status(200).json({ success: true, data: cached });
         }
 
-        // Find subject with the correct field name from your schema
-        const subjectQuery = {
-            subject: subjectName, // Changed from 'name' to 'subject' based on your schema
-            board,
-            grade
-        };
-
-        if (medium) {
-            subjectQuery.medium = { $in: [medium] };
-        }
+        // 🔹 Find subject
+        const subjectQuery = { subject: subjectName, board, grade };
+        if (medium) subjectQuery.medium = { $in: [medium] };
 
         const subject = await Subject.findOne(subjectQuery).lean();
-
         if (!subject) {
-            return res.status(404).json({ 
+            return res.status(404).json({
                 success: false,
                 message: `Subject not found for ${board} board, grade ${grade}${medium ? `, medium ${medium}` : ''}`
             });
         }
 
-        // Find chapters with the same filters
-        const chapterQuery = {
-            board,
-            grade,
-            subjectname: subjectName // Add subject filter to get only relevant chapters
-        };
+        // 🔹 Build chapter query
+        const chapterQuery = { board, grade, subjectname: subjectName };
+        if (medium) chapterQuery.medium = { $in: [medium] };
 
-        if (medium) {
-            chapterQuery.medium = { $in: [medium] };
-        }
-
-        // Get chapters and videos in parallel
+        // 🔹 Fetch chapters sorted by creation date ascending (oldest first)
         const [chapters, videos] = await Promise.all([
-            Chapter.find(chapterQuery).lean(),
-            VideoQuiz.find({ board, grade, subName: subjectName }).lean() // Add subject filter for videos too
+            Chapter.find(chapterQuery)
+                .sort({ createdAt: 1 }) // ✅ ascending order (oldest first)
+                .lean(),
+            VideoQuiz.find({ board, grade, subName: subjectName }).lean()
         ]);
 
-        console.log('Found videos:', videos.length); // Debug log
+        console.log('Found videos:', videos.length);
 
         if (!chapters || chapters.length === 0) {
             return res.status(404).json({
@@ -502,63 +489,60 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
             });
         }
 
-        // Build the curriculum structure with names
+        // 🔹 Build curriculum structure
         const curriculum = {
             _id: subject._id,
-            subjectName: subject.subject, // Use 'subject' field from your schema
+            subjectName: subject.subject,
             board: subject.board,
             grade: subject.grade,
             chapters: chapters.map(chapter => {
                 const chapterData = {
                     _id: chapter._id,
-                    chapterName: chapter.chaptername || 'Untitled Chapter', // This should now work correctly
-                    // Videos directly under chapter (videos that don't belong to any specific topic/subtopic)
+                    chapterName: chapter.chaptername || 'Untitled Chapter',
                     videos: videos
-                        .filter(video => 
+                        .filter(video =>
                             video.chapterName === (chapter.chaptername || 'Untitled Chapter') &&
                             (!video.topicName || video.topicName === '') && 
                             (!video.subtopicName || video.subtopicName === '')
                         )
                         .map(video => ({
                             _id: video._id,
-                            videoUrl: video.videoUrl || video.url // Handle both possible field names
+                            videoUrl: video.videoUrl || video.url
                         }))
                 };
 
-                // Add topics if they exist
+                // 🔹 Add topics if exist
                 if (chapter.topics && chapter.topics.length > 0) {
                     chapterData.topics = chapter.topics.map(topic => {
                         const topicData = {
                             _id: topic._id,
-                            topicName: topic.topicname || topic.name || 'Untitled Topic', // This should now work correctly
-                            // Videos directly under topic (not under any subtopic)
+                            topicName: topic.topicname || topic.name || 'Untitled Topic',
                             videos: videos
                                 .filter(video => 
-                                    video.topicName === (topic.topicname || topic.name|| 'Untitled Topic') &&
+                                    video.topicName === (topic.topicname || topic.name || 'Untitled Topic') &&
                                     video.chapterName === (chapter.chaptername || 'Untitled Chapter') &&
                                     (!video.subtopicName || video.subtopicName === '')
                                 )
                                 .map(video => ({
                                     _id: video._id,
-                                    videoUrl: video.videoUrl || video.url // Handle both possible field names
+                                    videoUrl: video.videoUrl || video.url
                                 }))
                         };
 
-                        // Add subtopics if they exist
+                        // 🔹 Add subtopics if exist
                         if (topic.subtopics && topic.subtopics.length > 0) {
                             topicData.subtopics = topic.subtopics.map(subtopic => ({
                                 _id: subtopic._id,
-                                subtopicName: subtopic.subtopicname || 'Untitled Subtopic', // This should now work correctly
-                                // Videos under subtopic
+                                subtopicName: subtopic.subtopicname || 'Untitled Subtopic',
                                 videos: videos
                                     .filter(video => 
                                         video.subtopicName === (subtopic.subtopicname || 'Untitled Subtopic') &&
-                                        video.topicName === (topic.topicname || 'Untitled Topic') &&
+                                        video.topicName === (topic.topicname || topic.name || 'Untitled Topic') &&
                                         video.chapterName === (chapter.chaptername || 'Untitled Chapter')
                                     )
                                     .map(video => ({
                                         _id: video._id,
-                                        videoUrl: video.videoUrl || video.url // Handle both possible field names
+                                        videoUrl: video.videoUrl || video.url
                                     }))
                             }));
                         }
@@ -571,13 +555,9 @@ export const getCurriculumBySubjectName = asyncHandler(async (req, res) => {
             })
         };
 
-        // Cache it
+        // 🔹 Cache and respond
         setCache(cacheKey, curriculum);
-
-        res.status(200).json({
-            success: true,
-            data: curriculum
-        });
+        res.status(200).json({ success: true, data: curriculum });
 
     } catch (error) {
         console.error('Error fetching curriculum:', error);
