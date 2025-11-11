@@ -1,0 +1,5 @@
+.env
+node_modules
+# Firebase service account keys
+src/controllers/google-services.json
+src/controllers/notification/firebase-service-account.json
